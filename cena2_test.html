@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cena 2 — teste: livro folheando</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;cursor:pointer;}
+  #c{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  #hint{position:fixed;left:12px;bottom:10px;font:13px system-ui;color:#8a7f6b;opacity:.5;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">teste do folhear — clique repete</div>
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1; const AR=16/9; let stage={x:0,y:0,w:0,h:0};
+const BG='#f4efe3', INK='#2d241a';
+function resize(){ DPR=Math.min(devicePixelRatio||1,2); W=innerWidth;H=innerHeight;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR); cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0); let w=W,h=W/AR; if(h>H){h=H;w=H*AR;} stage={x:(W-w)/2,y:(H-h)/2,w,h}; }
+addEventListener('resize',resize);
+
+function hash(x,y){ let n=(x|0)*374761393+(y|0)*668265263; n=(n^(n>>13))*1274126177; return ((n^(n>>16))>>>0)/4294967295; }
+const BOIL_FPS=8;
+function boil(now,a){ const s=Math.floor(now/1000*BOIL_FPS); return {dx:(hash(s*13+1,7)-0.5)*2*a, dy:(hash(s*7+5,3)-0.5)*2*a}; }
+function inkLine(x1,y1,x2,y2,now,jit,wid){
+  const seg=7, bo=boil(now,jit);
+  ctx.lineWidth=wid; ctx.strokeStyle=INK; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath();
+  for(let i=0;i<=seg;i++){ const t=i/seg,x=x1+(x2-x1)*t,y=y1+(y2-y1)*t;
+    const j=(hash(i*7+((now/125)|0),i)-0.5)*jit;
+    if(!i)ctx.moveTo(x+bo.dx,y+j); else ctx.lineTo(x+bo.dx,y+j); } ctx.stroke();
+}
+
+// livro aberto (vale no centro). retorna geometria.
+function book(){
+  const cx=stage.x+stage.w/2, cy=stage.y+stage.h*0.52;
+  const BW=stage.w*0.185, BH=stage.h*0.64;      // cada página retrato
+  return {cx,cy,BW,BH, top:cy-BH/2, bot:cy+BH/2, dipT:BH*0.06, dipB:BH*0.05};
+}
+
+// página base (lado dir=+1/-1) com vale
+function basePage(now,b,dir){
+  const {cx,BW,top,bot,dipT,dipB}=b, xo=cx+dir*BW;
+  ctx.beginPath();
+  ctx.moveTo(cx,top+dipT); ctx.quadraticCurveTo(cx+dir*BW*0.5, top+dipT*0.3, xo, top);
+  ctx.lineTo(xo,bot); ctx.quadraticCurveTo(cx+dir*BW*0.5, bot, cx, bot-dipB); ctx.closePath();
+  ctx.fillStyle='#f9f5ea'; ctx.fill();
+  for(let i=1;i<=5;i++){ const x=cx+dir*(BW-i*BW*0.03);
+    ctx.strokeStyle='rgba(58,47,34,0.16)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,top+i*1.4); ctx.lineTo(x,bot-i*1.4); ctx.stroke(); }
+}
+
+// página virando: u 0..1 (dir->esq). curva + brilho = folha dobrando
+function flipPage(now,b,u){
+  const {cx,BW,top,bot}=b;
+  const th=u*Math.PI, w=BW*Math.cos(th), sh=Math.abs(Math.sin(th)), back=u>0.5;
+  const bo=boil(now,1.6), ox=cx+w+bo.dx, midY=(top+bot)/2;
+  const curl=w*0.14;                                  // estufa o meio da borda
+  ctx.beginPath();
+  ctx.moveTo(cx,top);
+  ctx.lineTo(ox,top);
+  ctx.quadraticCurveTo(ox+curl,midY, ox,bot);         // borda externa curva
+  ctx.lineTo(cx,bot); ctx.closePath();
+  // brilho: claro no meio (dobra), escuro nas pontas
+  const g=ctx.createLinearGradient(cx,0,ox+curl,0);
+  const e=(m)=>`rgb(${(250*m)|0},${(246*m)|0},${(236*m)|0})`;
+  const d=back?0.90:0.96;
+  g.addColorStop(0,e(d-0.05*sh)); g.addColorStop(0.5,e(1.0)); g.addColorStop(1,e(d-0.08*sh));
+  ctx.fillStyle=g; ctx.fill();
+  // sombra que a folha joga (perto da borda, do lado interno)
+  ctx.strokeStyle=`rgba(0,0,0,${0.05+0.09*sh})`; ctx.lineWidth=(bot-top)*0.02;
+  ctx.beginPath(); ctx.moveTo(ox,top); ctx.quadraticCurveTo(ox+curl,midY,ox,bot); ctx.stroke();
+  // corte de fora em tinta (curvo)
+  ctx.strokeStyle=INK; ctx.lineWidth=Math.max(1.5,(bot-top)*0.005); ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(ox,top); ctx.quadraticCurveTo(ox+curl,midY,ox,bot); ctx.stroke();
+}
+
+const NFLIP=3;
+let t0=performance.now(); function replay(){ t0=performance.now(); }
+
+function draw(now){
+  requestAnimationFrame(draw);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.beginPath(); ctx.rect(stage.x,stage.y,stage.w,stage.h); ctx.clip();
+  ctx.fillStyle=BG; ctx.fillRect(stage.x,stage.y,stage.w,stage.h);
+
+  const b=book(); const {cx,top,bot,BW,dipT,dipB}=b;
+
+  // sombra no chão
+  ctx.fillStyle='rgba(0,0,0,0.05)'; ctx.beginPath(); ctx.ellipse(cx,bot+b.BH*0.05,BW*1.15,b.BH*0.05,0,0,7); ctx.fill();
+
+  basePage(now,b,-1); basePage(now,b,+1);
+
+  const el=(now-t0)/1000, speed=1.4, pages=[];
+  for(let i=0;i<NFLIP;i++) pages.push(((el*speed)+i/NFLIP)%1);
+  pages.sort((a,b)=>Math.sin(a*Math.PI)-Math.sin(b*Math.PI));
+  for(const u of pages) flipPage(now,b,u);
+
+  // contorno externo + lombada, em tinta
+  const wc=Math.max(2,b.BH*0.006);
+  inkLine(cx-BW,top, cx,top+dipT, now,2.2,wc); inkLine(cx,top+dipT, cx+BW,top, now,2.2,wc);   // topo (vale)
+  inkLine(cx-BW,bot, cx,bot-dipB, now,2.2,wc); inkLine(cx,bot-dipB, cx+BW,bot, now,2.2,wc);   // base (vale)
+  inkLine(cx-BW,top, cx-BW,bot, now,2.0,wc); inkLine(cx+BW,top, cx+BW,bot, now,2.0,wc);        // laterais
+  inkLine(cx,top+dipT, cx,bot-dipB, now,1.6,wc*0.9);                                           // lombada
+
+  ctx.restore();
+}
+addEventListener('pointerdown',replay);
+resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

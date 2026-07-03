@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>o capítulo que falta — abertura TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    -webkit-user-select:none;user-select:none;cursor:pointer;}
+  #c{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  #hint{position:fixed;left:12px;bottom:10px;font:13px/1.4 system-ui,sans-serif;color:#8a7f6b;opacity:.5;pointer-events:none;}
+  /* player de scrub (some quando o mouse sai; pra ajustes, não faz parte da peça) */
+  #player{position:fixed;left:50%;transform:translateX(-50%);bottom:34px;z-index:5;
+    display:flex;gap:10px;align-items:center;width:min(760px,86vw);padding:7px 12px;
+    background:rgba(0,0,0,.38);border-radius:10px;opacity:.22;transition:opacity .15s;cursor:default;}
+  #player:hover{opacity:1;}
+  #bar{flex:1;accent-color:#d8cba8;cursor:pointer;}
+  #pp{background:none;border:0;color:#e8dfc8;font-size:15px;cursor:pointer;width:26px;}
+  #tm{font:12px/1 system-ui,sans-serif;color:#e8dfc8;min-width:86px;text-align:right;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">clique no palco/R = repetir · espaço = pausar · ←/→ = ±5s · D = calibrar tela</div>
+<div id="player">
+  <button id="pp" title="pausar/tocar (espaço)">⏸</button>
+  <input id="bar" type="range" min="0" max="1200" value="0" step="1">
+  <span id="tm">0:00 / 0:00</span>
+</div>
+<script>
+(()=>{
+"use strict";
+
+/* ============================================================
+   "o capítulo que falta" — abertura
+   preto -> a TV é DESENHADA (tinta) -> liga (flash + estática
+   colorida) -> boil trocando tv1/2/3 a 8fps -> zoom suave no
+   meio da tela até a TV virar moldura. tudo em 8fps.
+   ============================================================ */
+
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,DEBUG=false;
+const BG='#f4efe3';                       // "página" onde a TV é desenhada
+
+/* ---------- CALIBRAGEM (aperta D pra ver tela + papel) ---------- */
+const SCREEN={ x:0.135, y:0.275, w:0.585, h:0.545, r:0.045 };  // tela na TV (fração do palco)
+const FRAME_FILL=0.95;                    // quanto a tela ocupa no fim do zoom (moldura fininha)
+// mão escrevendo — calibragem (ponta do lápis + degradê do pulso)
+const HAND_TIP_X=0.20, HAND_TIP_Y=0.74;
+const FADE_AX0=0.42,FADE_AY0=0.42,FADE_AX1=1.06,FADE_AY1=1.06,FADE_KEEP=0.5;
+
+/* ---------- palco 16:9 ---------- */
+const AR=16/9; let stage={x:0,y:0,w:0,h:0};
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=innerWidth;H=innerHeight; cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+  cv.style.width=W+'px';cv.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0);
+  let w=W,h=W/AR; if(h>H){h=H;w=H*AR;} stage={x:(W-w)/2,y:(H-h)/2,w,h};
+}
+addEventListener('resize',resize);
+function scr(){ return {x:stage.x+stage.w*SCREEN.x, y:stage.y+stage.h*SCREEN.y,
+                        w:stage.w*SCREEN.w, h:stage.h*SCREEN.h, r:stage.h*SCREEN.r}; }
+function roundRect(c,R){ const {x,y,w,h,r}=R; c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+/* ---------- ruído / campo de tinta ---------- */
+function hash(x,y){ let n=(x|0)*374761393+(y|0)*668265263; n=(n^(n>>13))*1274126177; return ((n^(n>>16))>>>0)/4294967295; }
+function sstep(t){ return t*t*t*(t*(t*6-15)+10); }
+function vnoise(x,y){ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=sstep(xf),v=sstep(yf);
+  const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);
+  return (a*(1-u)+b*u)*(1-v)+(c*(1-u)+d*u)*v; }
+function fbm(x,y){ let s=0,a=.5,f=1; for(let o=0;o<4;o++){s+=a*vnoise(x*f,y*f);f*=2;a*=.5;} return s; }
+function makeField(fw,fh,nS,eW,nW,soft){
+  const thr=new Float32Array(fw*fh),c=document.createElement('canvas');
+  c.width=fw;c.height=fh; const cx=c.getContext('2d'),id=cx.createImageData(fw,fh); let mx=0;
+  for(let j=0;j<fh;j++)for(let i=0;i<fw;i++){ const nx=i/(fw-1),ny=j/(fh-1);
+    const d=Math.min(nx,1-nx,ny,1-ny)*2, t=d*eW+fbm(nx*nS,ny*nS)*nW; thr[j*fw+i]=t; if(t>mx)mx=t; }
+  for(let k=0;k<thr.length;k++)thr[k]/=mx;
+  return { canvas:c, update(p){ const px=id.data;
+    for(let k=0;k<thr.length;k++){ let a=(p-thr[k])/soft; a=a<0?0:a>1?1:a; const o=k*4;
+      px[o]=px[o+1]=px[o+2]=0; px[o+3]=(a*255)|0; } cx.putImageData(id,0,0); } };
+}
+const inkField=makeField(320,180,5,1.0,0.55,0.10);
+
+/* ---------- assets TV ---------- */
+const tv=[new Image(),new Image(),new Image()]; let tvN=0;
+tv.forEach((im,i)=>{ im.onload=()=>tvN++; im.src=`tv${i+1}.png`; });
+const tvBuf=document.createElement('canvas'), tbx=tvBuf.getContext('2d'); // p/ tinta
+function ensureBuf(){ if(tvBuf.width!==cv.width||tvBuf.height!==cv.height){ tvBuf.width=cv.width; tvBuf.height=cv.height; } }
+
+/* ---------- estática ---------- */
+const ST=document.createElement('canvas'); ST.width=440; ST.height=248;
+const stx=ST.getContext('2d'), stID=stx.createImageData(ST.width,ST.height);
+let stStep=-1; const STATIC_FPS=12;
+function regenStatic(seed){ const p=stID.data;
+  for(let i=0;i<p.length;i+=4){ const v=(hash(i+seed*91, seed*7+i*3)*255)|0;
+    p[i]=v+((hash(i,seed)-0.5)*72|0); p[i+1]=v+((hash(i+7,seed)-0.5)*72|0);
+    p[i+2]=v+((hash(i+13,seed)-0.5)*72|0); p[i+3]=255; }
+  stx.putImageData(stID,0,0); }
+
+/* ---------- silhueta da menina (dentro da TV) ---------- */
+const menina=new Image(); let meninaOK=false; menina.onload=()=>meninaOK=true; menina.src='menina.png';
+const MF=8, MFW=431, MFH=431;
+
+/* ---------- cena 2: menina levanta + folha vira livro + folhear ---------- */
+const lev=new Image(); let levOK=false; lev.onload=()=>levOK=true; lev.src='menina_levanta.png';
+const LFW=360, LFH=340, LEV_ANCHOR_Y=336, LEV_FPS=8;      // pés ancorados em y=336 da célula
+const bookT=new Image(); let bookTOK=false; bookT.onload=()=>bookTOK=true; bookT.src='folha_vira_livro.png';
+const BTW=470, BTH=259;                                    // âncora da BASE por frame (medida da tira)
+const BT_AX=[219,223,187,254,225,196,176,230,196,249,219,196];
+const BT_AY=[223,258,258,258,258,258,245,241,245,214,215,215];
+const BT_W0=181, BT_W1=374;                                // largura da base: folha (f0) e livro aberto (f11)
+const bookR=new Image(); let bookROK=false; bookR.onload=()=>bookROK=true; bookR.src='livro_folheia.png';
+const BRW=431, BRH=431, BR_AX=215.5, BR_AY=399, BR_W=386;  // folhear: âncora fixa da base
+// knobs cena 2 (frações da tela R)
+const PAPER_X=0.580, PAPER_Y=0.815, PAPER_W=0.145;         // base da folha no chão (onde o papel estava)
+const BOOK_X=0.585, BOOK_Y=0.830, BOOK_W=0.21;             // livro fica no lugar da folha, cresce pouco
+const GIRL_X0=0.475, GIRL_X1=0.435, GIRL_H=0.7075, GIRL_FY=0.88; // menina: deriva x, escala, y dos pés
+const BOOK_FPS=5;                                          // transformação mais lenta que o boil
+// cena 2b: as folhas SAEM do livro -> viram carrossel BRANCO no fundo, atrás da menina
+const PAGE_Y=-0.78, PAGE_H=1.75, PAGE_AR=0.74, PAGE_GAP=1.30;  // retratos ENORMES no céu (horizontes)
+const PAGE_BG=[244,239,227];                                    // papel = cor do fundo (só o traço define)
+const PAGE_X0=0.18, N_LAUNCH=6, FLIGHT=1.4, LAUNCH_GAP=0.4;    // 6 primeiras voam do livro, 1 a cada 0.4s
+const PAGE_C0=[241,216,152];                                    // MESMA cor envelhecida das páginas do livro
+const BOOK_FADE=3.0;                                            // livro se dissolve enquanto solta as folhas
+const SCROLL_V=0.16, SCROLL_RAMP=1.5, PAR=0.85;                 // carrossel anda quando ela anda (parallax)
+const ZOUT=0.50, ZOUT_DY=0.22;                                  // câmera afasta bem (lento e suave)
+const ZOUT2=0.45, ZOUT2_DY=0.10;                                // 2º afastamento forte quando ela anda
+// menina andando (andandogrid12 v3: 12 frames com passagem de pés juntos — passos de verdade)
+const walkImg=new Image(); let walkOK=false, WFW=0, WFH=0, WFN=12;
+walkImg.onload=()=>{ WFH=walkImg.naturalHeight; WFW=Math.round(walkImg.naturalWidth/WFN); walkOK=true; };
+walkImg.onerror=()=>{};   // sem arquivo ainda: segue com a pose de pé
+walkImg.src='menina_anda.png';
+// cena 2c: os FUTUROS (artes da Marcela) se pintam nas folhas do carrossel, na ordem do roteiro.
+// carregamento especulativo: enquanto os png não existirem, as folhas ficam em branco.
+const FUT_SRC=['futuro_escola.png','futuro_professora.png','futuro_casa.png',
+               'futuro_invencao.png','futuro_comunidade.png'];
+const futImg=FUT_SRC.map(s=>{ const im=new Image(); im.onload=()=>im._ok=true; im.onerror=()=>{}; im.src=s; return im; });
+let futStart=[];                                                // el em que a FOLHA k começou a pintar (repetições incluídas)
+const FUT_TRIG=2.00, FUT_PAINT=3.0, FUT_STAGGER=1.1, FUT_M=0.84; // gatilho (fração de R.w; 2.0 = pinta assim que aparece — SEM folha em branco parada), duração da tinta, ordem, margem
+const futField=makeField(120,150,5,1.0,0.55,0.10);
+const futBuf=document.createElement('canvas'); const fbx=futBuf.getContext('2d');
+// o multiply acontece DENTRO do buffer (arte <img> sobre a cor do papel) porque blend de
+// drawImage com fonte <canvas> falha em alguns Chromes — o buffer já sai na cor final e é
+// desenhado na tela com source-over comum, mascarado pela tinta (destination-in).
+function composeFut(i,p){ const im=futImg[i];
+  const w=Math.min(700,im.naturalWidth), h=Math.round(w*im.naturalHeight/im.naturalWidth);
+  if(futBuf.width!==w||futBuf.height!==h){ futBuf.width=w; futBuf.height=h; }
+  fbx.setTransform(1,0,0,1,0,0); fbx.clearRect(0,0,w,h);
+  fbx.globalCompositeOperation='source-over';
+  fbx.fillStyle=`rgb(${PAGE_BG[0]},${PAGE_BG[1]},${PAGE_BG[2]})`; fbx.fillRect(0,0,w,h);
+  fbx.globalCompositeOperation='multiply'; fbx.imageSmoothingEnabled=true;
+  fbx.drawImage(im,0,0,w,h);
+  fbx.globalCompositeOperation='destination-in';
+  futField.update(p); fbx.drawImage(futField.canvas,0,0,w,h);
+  fbx.globalCompositeOperation='source-over';
+}
+const girlField=makeField(150,150,6,1.0,0.6,0.12);
+const girlBuf=document.createElement('canvas'); girlBuf.width=MFW; girlBuf.height=MFH; const gbx=girlBuf.getContext('2d');
+function composeGirl(idx,p){
+  gbx.setTransform(1,0,0,1,0,0); gbx.clearRect(0,0,MFW,MFH);
+  gbx.globalCompositeOperation='source-over';
+  gbx.drawImage(menina, idx*MFW,0,MFW,MFH, 0,0,MFW,MFH);
+  if(p<1.1){ gbx.globalCompositeOperation='destination-in'; gbx.imageSmoothingEnabled=true;
+    girlField.update(p); gbx.drawImage(girlField.canvas,0,0,MFW,MFH); }
+  gbx.globalCompositeOperation='source-over';
+}
+
+/* ---------- cena 3: rebobina -> a MESMA TV da cena 1, com estática anos 2000 ---------- */
+// DECISÃO (Iagho): a TV com estática vem PRONTA do GPT — a mesma TV da cena 1 redesenhada
+// com o chuvisco colorido JÁ NA TELA, em 3 variações (tvest1/2/3.png, boil 8fps, igual ao
+// esquema tv1/2/3). quando uma ref está passando, volta a TV de tela vazia + ref por cima.
+// assets ESPECULATIVOS (mesmo padrão dos futuros): enquanto não existirem, fallbacks.
+const tvest=[1,2,3].map(i=>{ const im=new Image(); im.onload=()=>im._ok=true; im.onerror=()=>{}; im.src=`tvest${i}.png`; return im; });
+const est2=new Image(); est2.onload=()=>est2._ok=true; est2.onerror=()=>{}; est2.src='estatica2000.png';
+const EST_N=6;   // (fallback antigo: tira de estática avulsa, se um dia existir)
+const TVREF_N=8;   // curadoria do casal: sítio, caverna do dragão, vila sésamo, cocoricó, pingu, bob esponja, zoboomafoo, shaun
+const tvRef=Array.from({length:TVREF_N},(_,i)=>{ const im=new Image(); im.onload=()=>im._ok=true; im.onerror=()=>{}; im.src=`tvref_${String(i+1).padStart(2,'0')}.png`; return im; });
+// as refs aparecem CENTRADAS na tela (não cobrem tudo), com bordas em degradê transparente
+// e pintando-se com tinta ao entrar (pedido do Iagho — antes vazavam da delimitação da tela)
+const refField=makeField(160,120,5,1.0,0.55,0.10);
+const refBuf=document.createElement('canvas'); const rbx=refBuf.getContext('2d');
+function composeRef(im,p){
+  const w=Math.min(700,im.naturalWidth), h=Math.round(w*im.naturalHeight/im.naturalWidth);
+  if(refBuf.width!==w||refBuf.height!==h){ refBuf.width=w; refBuf.height=h; }
+  rbx.setTransform(1,0,0,1,0,0); rbx.clearRect(0,0,w,h);
+  rbx.globalCompositeOperation='source-over'; rbx.imageSmoothingEnabled=true;
+  rbx.drawImage(im,0,0,w,h);
+  if(p<1.1){ rbx.globalCompositeOperation='destination-in';        // tinta (mesma linguagem dos futuros)
+    refField.update(p); rbx.drawImage(refField.canvas,0,0,w,h); }
+  rbx.globalCompositeOperation='destination-out';                  // degradê transparente nas 4 bordas
+  const fx=w*REF_FEATHER, fy=h*REF_FEATHER;
+  let g=rbx.createLinearGradient(0,0,fx,0); g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  rbx.fillStyle=g; rbx.fillRect(0,0,fx,h);
+  g=rbx.createLinearGradient(w,0,w-fx,0); g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  rbx.fillStyle=g; rbx.fillRect(w-fx,0,fx,h);
+  g=rbx.createLinearGradient(0,0,0,fy); g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  rbx.fillStyle=g; rbx.fillRect(0,0,w,fy);
+  g=rbx.createLinearGradient(0,h,0,h-fy); g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  rbx.fillStyle=g; rbx.fillRect(0,h-fy,w,fy);
+  rbx.globalCompositeOperation='source-over';
+}
+const SCREEN3={ x:0.135, y:0.275, w:0.585, h:0.545, r:0.045 }; // tela na cena 3 (= SCREEN da cena 1, mesma TV)
+const REW_A=1.35;                                    // aceleração exponencial do rebobinar
+const REW_BLUR=14, S3_POP=0.6, S3_FLASH=0.15;        // borrão máx (px), pop da TV, flash do corte
+const REF_START=1.6, REF_DUR=1.7, REF_BLIP=0.25;     // slideshow na tela: começa, cada ref fica, blip de estática entre (acelerado a pedido)
+const REF_PAINT=0.7, REF_FIT=0.86, REF_FEATHER=0.10; // tinta ao entrar, tamanho na tela (contain), largura do degradê das bordas
+// ---- cena 3b: depois das refs, a ESTÁTICA SAI e as falas são ESCRITAS NA TELA ----
+const REF_END=REF_START+TVREF_N*(REF_DUR+REF_BLIP);  // fim do slideshow (1 volta completa das 8)
+const Q3_PX=0.085;                                   // fonte das falas (fração da ALTURA DA TELA)
+const QUOTES3=[
+  "quando a tv ficou mais comum\nnas casas do brasil, ela também virou\numa oportunidade de sala de aula.",
+  "em uma época em que o país\nainda enfrentava altos índices\nde analfabetismo e evasão escolar,\na televisão surgiu como uma\ntecnologia carregada de promessas.",
+  "uma delas era\ndemocratizar o conhecimento.",
+  "a tecnologia mais atual daquele tempo\nfoi usada para levar educação\na mais pessoas.",
+  "para entrar nas casas.\npara ensinar de um jeito\nmais acessível.",
+  "para mostrar que aprender\ntambém podia acontecer pela tela,\npela história, pela fantasia.",
+  "e por aí o nosso saber\ncomeçou com sonhar alto.",
+  "com imaginar realidades nossas,\nque talvez um dia pudessem sair\nda nossa cabeça e virar mundo.",
+  "porque aprender\ntambém é imaginar."
+];
+const Q3SEQ=(()=>{ const a=[]; let t=REF_END+1.0;    // agenda auto-derivada (como a QSEQ)
+  for(const q of QUOTES3){ const n=q.replace(/\n/g,'').length;
+    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.8, fadeDur:0.9 });
+    t=end+1.8+0.9+0.4; }
+  return a; })();
+const Q3_END=Q3SEQ[Q3SEQ.length-1].fade+Q3SEQ[Q3SEQ.length-1].fadeDur;
+// ---- cena 4 (início): o LIVRO volta na tela (fade in + transformação inteira + folheia)
+// e vira um SMARTPHONE — asset especulativo livro_vira_celular.png (ver cena4-prompts.md)
+const T3={ bookAt:Q3_END+1.0, celAt:Q3_END+8.0,      // livro volta; livro->celular
+           zoomAt:Q3_END+8.8, zoomDur:3.0,           // cena 4: a TV é EMPURRADA pra fora (suave)
+           reelsAt:Q3_END+12.0, spamAt:Q3_END+16.0,  // 4b: reels (2 voltas de 2s) -> spam vibrando
+           walkAt:Q3_END+18.5,                       // 4c: a menina entra andando (dir->esq)
+           shrinkAt:Q3_END+19.0, shrinkDur:2.6 };    //     enquanto o celular ENCOLHE suave
+const Z4_MAX=2.6;   // quanto a TV cresce até sumir dos arredores — o celular NÃO cresce junto
+const BOOK3_W=0.42, BOOK3_Y=0.80;                    // livro na tela: largura (fração da tela), y da base
+const cel=new Image(); cel.onload=()=>cel._ok=true; cel.onerror=()=>{}; cel.src='livro_vira_celular.png';
+const CEL_N=12, CEL_FPS=5;                           // frames e fps da transformação
+// o strip foi RE-REGISTRADO (cada frame centralizado pelo bbox — o GPT deixava o objeto
+// passear ±25px entre células e o celular "desviava"). emenda sem salto: frame 0 (livro,
+// 324px de largura) nasce com a largura/posição do livro folheante (0.435·R.w em
+// 0.475/0.60) e a âncora DESLIZA pro centro da tela durante a transformação.
+const CEL_K=0.435/324, CEL_X=0.475, CEL_Y=0.60;      // âncora inicial (= livro folheante)
+const CEL_X1=0.515, CEL_Y1=0.49;                     // âncora final (centro VISUAL da tela desenhada — a moldura é assimétrica)
+// cena 4b: reels (like/share) + spam de mensagens — assets especulativos (cena4-prompts.md §2)
+// strips re-registrados por bbox; escala = MÉDIA GEOMÉTRICA dos ratios de largura/altura
+// do bbox do celular (os desenhos têm proporções diferentes: antigo 154×272, reels 211×329,
+// spam 181×326 — casar só largura dava pop de −12% na altura). vibração do spam é POR CÓDIGO.
+const cel2=new Image(); cel2.onload=()=>cel2._ok=true; cel2.onerror=()=>{}; cel2.src='cel_reels.png';
+const cel3=new Image(); cel3.onload=()=>cel3._ok=true; cel3.onerror=()=>{}; cel3.src='cel_spam.png';
+const REELS_FPS=6, SPAM_FPS=6;                       // reels toca em loop; spam empilha e segura o fim
+const REELS_S=0.777, SPAM_S=0.842;                   // escala relativa ao k do celular atual (média geométrica)
+const VIB_HZ=45, VIB_AMP=0.004;                      // vibração: frequência (passos/s) e amplitude (fração de R.w)
+// cena 4c: a menina do início entra andando DIREITA->ESQUERDA (menina_anda/menina_levanta
+// ESPELHADOS por código) enquanto o celular encolhe até ficar bem menor que ela; depois
+// ela PEGA o celular e vira pra si — asset especulativo menina_pega.png (grid a gerar,
+// cena4-prompts.md §3 — gerar de perfil pra DIREITA como as refs, o código espelha).
+const grab=new Image(); grab.onload=()=>grab._ok=true; grab.onerror=()=>{}; grab.src='menina_pega.png';
+const GRAB_N=12, GRAB_FPS=5;                         // fim = boil f10..12 (padrão dos grids)
+const GRAB_GF=0.80, GRAB_X=0.635, GRAB_PAD=4;        // CALIBRADO por bbox (2026-07-02, slice_pega.py —
+                                                     // recorte por componente, PÉS INTEIROS): corpo f0 370px de célula 482
+                                                     // casado com levanta f11 (326/340); pés registrados em fh-4
+const G4_H=0.52, G4_FY=0.80;                         // menina: altura e y dos pés (frações do palco)
+const G4_X0=1.10, G4_X1=0.635, WALK4_V=0.16;         // entra de fora, para diante do celular; velocidade (palco/s)
+const CEL4_F=0.328, CEL4_X=0.542, CEL4_Y=0.464;      // encolhimento: fator/destino CALIBRADOS pelo celular
+                                                     // do f0 do grid da pegada (flutua na frente do rosto dela)
+const T3g={ arrive:T3.walkAt+(G4_X0-G4_X1)/WALK4_V };// chegada auto-derivada da velocidade
+T3g.grabAt=T3g.arrive+0.8;                           // ela olha o celular um instante e pega
+// cena 4: narração da Marcela escrita à mão no PAPEL (coluna ESQUERDA — o celular vive no
+// centro/direita), uma por vez, mesmo padrão da QSEQ; no fim, "por isso, existe" + O TÍTULO
+// "O capítulo que falta" em DESTAQUE (os dois FICAM; o título com as letras fervendo a
+// 8fps uma a uma — handWrite perLetter)
+const QUOTES4=[
+  "hoje, temos uma nova tecnologia nas mãos.\ne é curioso perceber como estamos\nenfrentando um problema parecido\ncom o daquela época.",
+  "mas, infelizmente, boa parte\ndo nosso tempo no celular acaba\nsendo ocupado por conteúdos rápidos,\nsuperficiais, que prendem a atenção,\nmas nem sempre despertam a criatividade.",
+  "aos poucos, a gente vai perdendo\na vontade de buscar novos mundos.",
+  "de fazer perguntas.\nde criar.\nde imaginar outros futuros.",
+  "e quando esquecemos de aprender,\na nossa história é interrompida."
+];
+const Q4SEQ=(()=>{ const a=[]; let t=T3.reelsAt+0.5; // agenda auto-derivada (como a Q3SEQ)
+  for(const q of QUOTES4){ const n=q.replace(/\n/g,'').length;
+    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.8, fadeDur:0.9 });
+    t=end+1.8+0.9+0.4; }
+  return a; })();
+const Q4_LEAD="por isso, existe", TITLE="O capítulo que falta";
+const T4={ leadAt:Q4SEQ[4].fade+Q4SEQ[4].fadeDur+0.4 };
+T4.leadStart=T4.leadAt+0.6; T4.leadDur=1.6;
+T4.titleAt=T4.leadStart+T4.leadDur+0.5;              // a mão escreve o título (devagar, dramático)
+T4.titleStart=T4.titleAt+0.5; T4.titleDur=1.9;
+const Q4_PX=0.042, Q4_CX=0.25, Q4_Y=0.28;            // narração: fonte/coluna esquerda (frações do palco)
+const TITLE_PX=0.075, TITLE_CX=0.30, TITLE_Y=0.40, LEAD_Y=0.30; // destaque final (quadrante livre)
+// ---- cena 5a: a lampadinha de ideia acende sobre a cabeça dela -> treme -> RACHA -> apaga
+// (asset especulativo lampada.png, grid §4 do cena4-prompts.md; amarelo aquarela quando acesa).
+// quando ela racha, o PAPEL racha junto (abrupto) e escurece, e o MUNDO CONGELA (boil para) —
+// só o título continua fervendo. sincronia com a narração: acende no "de criar. de imaginar…",
+// treme no "e quando esquecemos…", racha quando "…interrompida." termina de ser escrita.
+const lamp=new Image(); lamp.onload=()=>lamp._ok=true; lamp.onerror=()=>{}; lamp.src='lampada.png';
+const LAMP_N=12, LAMP_X=0.615, LAMP_Y=0.215, LAMP_H=0.11; // centro e altura (frações do palco)
+const T5={ lampAt:Q4SEQ[3].start, tremAt:Q4SEQ[4].start,
+           crackAt:Q4SEQ[4].start+Q4SEQ[4].wDur+0.4 };   // "…interrompida." escrita -> RACHA
+T5.freezeAt=T5.crackAt+0.9;                              // rachou -> a tela CONGELA
+// rachaduras do papel: polilinhas irregulares determinísticas irradiando da lâmpada,
+// aparecem ABRUPTAS em 3 degraus (0.35s) junto com o escurecimento
+const CRACKS=(()=>{ const a=[]; let id=0;
+  // traço de VIDRO rachando: zigue-zague seco (alterna o lado a cada passo), passos de
+  // tamanho irregular, 1–2 quebradas fortes no caminho e galhos curtos saindo do meio
+  const mk=(x0,y0,ang,len,step,branch)=>{ const p=[[x0,y0]]; let x=x0,y=y0;
+    const n=8+Math.floor(hash(id*7,3)*5);
+    const kink1=2+Math.floor(hash(id*29,17)*(n-4)), kink2=2+Math.floor(hash(id*31,5)*(n-4));
+    for(let i=0;i<n;i++){
+      let an=ang+(i%2?1:-1)*(0.18+hash(id*13+i,11)*0.25);         // zigue-zague
+      if(i===kink1||i===kink2) an+=(hash(id*37+i,13)-0.5)*1.6;    // quebrada forte
+      const s=len/n*(0.5+hash(id*17+i,23));                       // passo irregular
+      x+=Math.cos(an)*s; y+=Math.sin(an)*s; p.push([x,y]);
+      if(branch && i===kink1){                                    // galho curto
+        mk(x,y,an+(hash(id*41,7)>0.5?0.9:-0.9),len*0.25,step,false); }
+    }
+    a.push({p,step}); id++; };
+  mk(LAMP_X,LAMP_Y,2.60,0.45,0,true);                    // a primeira dispara sozinha
+  mk(LAMP_X,LAMP_Y,0.50,0.30,1,false); mk(LAMP_X,LAMP_Y,3.60,0.35,1,true);
+  mk(LAMP_X,LAMP_Y,1.90,0.50,1,false);
+  mk(LAMP_X,LAMP_Y,-0.60,0.55,2,true); mk(LAMP_X,LAMP_Y,2.20,0.75,2,true);
+  mk(LAMP_X,LAMP_Y,4.10,0.40,2,false); mk(LAMP_X,LAMP_Y,1.15,0.85,2,true);
+  // degraus 3/4 (depois do título escrito): a teia CRESCE e toma a página inteira
+  mk(LAMP_X,LAMP_Y,2.90,1.00,3,true);  mk(LAMP_X,LAMP_Y,0.15,0.80,3,true);
+  mk(LAMP_X,LAMP_Y,1.55,0.95,3,false);
+  mk(LAMP_X,LAMP_Y,3.30,1.10,4,true);  mk(LAMP_X,LAMP_Y,-0.25,0.95,4,true);
+  mk(LAMP_X,LAMP_Y,1.05,1.15,4,false); mk(LAMP_X,LAMP_Y,2.35,1.25,4,true);
+  return a; })();
+const CRACK_DK=[0.06,0.11,0.17,0.24,0.30];               // escurecimento por degrau
+// ---- cena 5c: depois do título escrito, as rachaduras CRESCEM e a página se ARRANCA
+// (opção (a) aprovada): um rasgo irregular se desenha perto da borda esquerda e a página
+// velha — o mundo congelado INTEIRO — sai voando como folha arrancada de caderno,
+// sobrando a tirinha serrilhada; por trás, uma página NOVA mais clara. o TÍTULO NÃO sai
+// com ela: fica vivo por cima (a única coisa que sobrevive).
+const BG5='#f9f5ec';                                     // a página nova (mais clara)
+const T5b={ crack2At:T4.titleStart+T4.titleDur+0.6 };    // título escrito -> teia cresce
+T5b.tearAt=T5b.crack2At+1.6; T5b.tearDraw=0.9; T5b.tearDur=1.6;  // rasgo desenha -> arranca
+T5b.gone=T5b.tearAt+T5b.tearDraw+T5b.tearDur;
+const TEAR=(()=>{ const p=[], n=26;                      // o rasgo (irregular, quase vertical)
+  for(let i=0;i<=n;i++){ const t=i/n;
+    let x=0.085+t*0.075+(hash(i*13,41)-0.5)*0.030;
+    if(i===9||i===17) x+=0.035;                          // dentes maiores
+    p.push([x, t*1.04-0.02]); }
+  return p; })();
+// cena 5d: a campanha escrita à mão na página nova
+const CAMP=[
+  "uma campanha que lembra que estudar permite\nque muitas histórias continuem a voar alto.",
+  "que o saber não é só uma obrigação da escola,\nmas uma forma de abrir possibilidades para a vida."
+];
+const CSEQ=(()=>{ const a=[]; let t=T5b.gone+0.6;
+  for(const q of CAMP){ const n=q.replace(/\n/g,'').length;
+    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+2.2, fadeDur:0.9 });
+    t=end+2.2+0.9+0.4; }
+  return a; })();
+const CAMP_PX=0.042, CAMP_Y=0.62;                        // campanha: centrada, abaixo do título
+const TAG="Histórias começam com o saber.", TAG_PX=0.062, TAG_Y=0.53, TAG_CX=0.353; // o fecho, destacado (fica; esquerda alinhada com a do título)
+const T5tag={ at:CSEQ[1].fade+CSEQ[1].fadeDur+0.5 };
+T5tag.start=T5tag.at+0.6; T5tag.dur=2.1;
+// ---- cena 6 (transição): o fecho respira, aí a tirinha rasgada se ESVAI e o
+// título+fecho saem em fade — o palco fica limpo pra caça à frase (5 estações)
+const T6={ at:T5tag.start+T5tag.dur+3.0, fadeDur:1.2 };
+// ---- cena 6: a caça à frase — 5 estações deslizando pra direita (plano no
+// cena6-prompts.md). letreiros manuscritos por código (logos = caligrafia);
+// personagens = grids eco_* (especulativos); a pista de cada estação é um
+// pedacinho AMARELO (callback da lâmpada) que voa pro rodapé e ACUMULA; no fim
+// os pedaços montam "Histórias começam com o saber."
+const S6={ at:T6.at+T6.fadeDur+0.8, dwell:7.5, slide:1.3 };
+S6.per=S6.dwell+S6.slide;
+const S6_NAMES=["@globo / GloboPop","g1","globoplay","Viu","Movimento LED"];
+const S6_WORDS=["Histórias","começam","com o",null,"saber."];
+const S6_LTR_PX=0.055, S6_LTR_Y=0.15;
+function s6off(e){ const t=e-S6.at; if(t<=0) return 0;      // câmera: estações já passadas
+  const k=Math.floor(t/S6.per), ph=t-k*S6.per;
+  return Math.min(4, k+(ph>S6.dwell?easeIO(cl01((ph-S6.dwell)/S6.slide)):0)); }
+const ecoLoad=s=>{ const im=new Image(); im.onload=()=>im._ok=true; im.onerror=()=>{}; im.src=s; return im; };
+const ecoPista=ecoLoad('eco_pista.png'); const PISTA_N=16;
+// pedacinhos coletados (fixos na câmera, rodapé; 4 slots — o Viu não dá palavra)
+const SCRAP_W=0.105, SCRAP_H=0.054, SCRAP_Y=0.90, SCRAP_PX=0.030;
+const SCRAP_X=[0.32,0.445,0.57,0.695];
+const AMAR='#e2aa4e', AMAR_TXT='#4a3416';
+// estação 1 (@globo/GloboPop): moldura de celular com "vídeo" abstrato + a dupla
+// (eco_pista) acha a pista no chão; a pista voa pro rodapé e vira "Histórias"
+const ST1={ celX:0.30, celY:0.46, celH:0.55, dupX:0.66, dupFY:0.82, dupH:0.44,
+            sprAt:0.6, fps:6, scrapAt:4.6, flyDur:1.1, scrapFrom:[0.695,0.375] };
+// estação 2 (g1): página de portal por código (manchete manuscrita + colunas de
+// risquinhos + foto hachurada) + leitor eco_jornal (lê em boil f0–2, aí a pista
+// cai do jornal f3–7 a 5fps, boil final f8–11); pista → "começam"
+const ecoJornal=ecoLoad('eco_jornal.png'); const JORNAL_N=12;
+const ST2={ pgX:0.29, pgY:0.46, pgH:0.60, ldrX:0.68, ldrFY:0.82, ldrH:0.46,
+            sprAt:0.6, read:1.6, fps:5, scrapAt:5.0, scrapFrom:[0.715,0.40],
+            man:"a educação de milhões de jovens\nfoi interrompida no meio" };
+// estação 3 (globoplay): telona com "novela" que PAUSA (o conteúdo congela — só a
+// moldura segue fervendo), ícone ⏸ pop, casal eco_sofa reage, e o MINI ANÚNCIO
+// sobe por baixo com o pedacinho "com o" (que voa pro rodapé já escrito)
+const ecoSofa=ecoLoad('eco_sofa.png'); const SOFA_N=12;
+const ST3={ tvX:0.33, tvY:0.34, tvW:0.46, sofX:0.345, sofFY:0.86, sofH:0.30,
+            pauseAt:2.2, fps:5, bannerAt:3.5, scrapAt:5.5, scrapFrom:[0.292,0.552] };
+// estação 4 (Viu): 2 molduras verticais de vídeo curto, um influenciador em cada
+// (eco_influencer2 = perfil→frontal na A; eco_influencer = frontal na B, defasado);
+// uma BOLHA rabiscada envolve a moldura A e ESTOURA quando ele abre os braços
+// ("Fora da bolha" manuscrito embaixo). Sem pedacinho — o Viu convida a BUSCAR.
+const ecoInf1=ecoLoad('eco_influencer.png'), ecoInf2=ecoLoad('eco_influencer2.png');
+const INF_N=12;
+const ST4={ aX:0.29, bX:0.545, mY:0.44, mH:0.56, sprAt:0.6, bStag:0.5,
+            popAt:2.9, lblY:0.795 };
+// estação 5 (Movimento LED): a carta/relato por código (linhas manuscritas
+// ilegíveis) — UMA palavra se acende em amarelo no meio do texto ("saber.",
+// sincronizada com a leitora eco_leitura descobrindo a dela) e voa pro rodapé
+const ecoLeitura=ecoLoad('eco_leitura.png'); const LEIT_N=12;
+const ST5={ pgX:0.30, pgY:0.44, pgH:0.58, ldrX:0.67, ldrFY:0.83, ldrH:0.42,
+            sprAt:0.6, read:1.6, fps:5, glowAt:3.0, scrapAt:5.4,
+            scrapFrom:[0.345,0.475] };
+const S6SCRAP=[ {at:ST1.scrapAt, from:ST1.scrapFrom},
+                {at:ST2.scrapAt, from:ST2.scrapFrom},
+                {at:ST3.scrapAt, from:ST3.scrapFrom, early:true}, null,
+                {at:ST5.scrapAt, from:ST5.scrapFrom} ];
+// o FECHO da cena 6: as estações esvaem e os 4 pedacinhos voam do rodapé pro
+// centro, se encaixando — a frase só se completa na cabeça de quem junta
+const S6F={ at:S6.at+4*S6.per+S6.dwell+0.3, tgtX:[0.2975,0.4325,0.5675,0.7025],
+            tgtY:0.44, grow:0.32 };
+
+/* ---------- mão + "Era uma vez…" (dentro da tela) ---------- */
+const TEXT="Era uma vez…", FONT="'Caveat', cursive";
+// cena 2c: narração (minúscula, estilo Marcela), escrita fixa na câmera — uma frase por vez,
+// a mão escreve, a frase fica, some em fade e a próxima entra no mesmo lugar (\n = quebra de linha)
+const QUOTES=[
+  "toda história começa com uma possibilidade.",
+  "histórias começam com mudanças.",
+  "quando a gente aprende, não estamos\napenas aprendendo a somar um mais um,\ndecorar uma fórmula ou descobrir de\nqual planta podemos colher frutos.",
+  "a gente aprende a sonhar. a imaginar.\na mudar a nossa realidade\ndo nosso jeitinho.",
+  "porque aprender também é descobrir\nque existem outros caminhos.\ne a educação abre esses caminhos."
+];
+const QUOTE_PX=0.050, QUOTE_X=0.55, QUOTE_Y=0.745;   // knobs: fonte/posição (frações do palco) — à DIREITA da menina (a possibilidade à frente); 1ª linha ancorada em QUOTE_Y, bloco cresce pra baixo
+const handImg=new Image(); let handOK=false, handAR=0.7;
+let handBaked,handBuf,hbx2,handField2,HW=0,HH=0;
+handImg.onload=()=>{ handAR=handImg.naturalWidth/handImg.naturalHeight;
+  HW=Math.min(handImg.naturalWidth,720); HH=Math.round(HW/handAR);
+  handBaked=document.createElement('canvas'); handBaked.width=HW; handBaked.height=HH;
+  const b=handBaked.getContext('2d'); b.drawImage(handImg,0,0,HW,HH);
+  b.globalCompositeOperation='source-atop'; b.fillStyle='rgba(40,33,27,0.7)'; b.fillRect(0,0,HW,HH); // grafite
+  b.globalCompositeOperation='source-over';
+  const g=b.createLinearGradient(HW*FADE_AX0,HH*FADE_AY0,HW*FADE_AX1,HH*FADE_AY1);              // pulso some
+  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(FADE_KEEP,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  b.globalCompositeOperation='destination-in'; b.fillStyle=g; b.fillRect(0,0,HW,HH); b.globalCompositeOperation='source-over';
+  handBuf=document.createElement('canvas'); handBuf.width=HW; handBuf.height=HH; hbx2=handBuf.getContext('2d');
+  handField2=makeField(Math.max(40,HW>>2),Math.max(40,HH>>2),6,1.0,0.6,0.12); handOK=true; };
+handImg.src='mao.png';
+function composeHandC(p){ hbx2.setTransform(1,0,0,1,0,0); hbx2.clearRect(0,0,HW,HH);
+  hbx2.globalCompositeOperation='source-over'; hbx2.drawImage(handBaked,0,0);
+  hbx2.globalCompositeOperation='destination-in'; hbx2.imageSmoothingEnabled=true;
+  handField2.update(p); hbx2.drawImage(handField2.canvas,0,0,HW,HH); hbx2.globalCompositeOperation='source-over'; }
+
+// mecânica genérica: mão escreve um texto letra a letra (linhas separadas por \n, 1ª linha
+// na baseline o.y, bloco cresce pra baixo), depois levanta; texto some em fade.
+// o={text,fontPx,x,y,tStart,tDur,hStart,hDur,liftAt,liftDur,fadeAt,fadeDur,handH}
+function handWrite(el,o){
+  const now=performance.now();
+  ctx.font=`${o.fontPx}px ${FONT}`;
+  const lines=o.text.split('\n'), lineH=o.fontPx*1.25;
+  const counts=lines.map(l=>[...l].length), total=counts.reduce((a,b)=>a+b,0);
+  const wp=cl01((el-o.tStart)/o.tDur);
+  const shown=Math.floor(wp*total), writing=el>=o.tStart&&shown<total;
+  const tAlpha=1-cl01((el-o.fadeAt)/o.fadeDur);
+  let cursorX=o.x, cursorY=o.y, rem=shown;
+  if(shown>0 && tAlpha>0){ const tb=boil(now,o.fontPx*0.014,0);
+    ctx.save(); ctx.globalAlpha=tAlpha; ctx.translate(tb.dx,tb.dy);
+    ctx.fillStyle='#3a2f22'; ctx.textBaseline='alphabetic';
+    for(let li=0;li<lines.length && rem>0;li++){
+      const s=[...lines[li]].slice(0,rem).join(''); rem-=counts[li];
+      if(s){
+        if(o.perLetter){                       // letras fervendo UMA A UMA (8fps, jitter próprio)
+          const st=Math.floor(now/1000*BOIL_FPS); let cx=o.x;
+          for(const ch of s){
+            const jx=(hash(st*31+cx|0,13)-0.5)*2*o.fontPx*0.022,
+                  jy=(hash(st*17+(cx*3|0),29)-0.5)*2*o.fontPx*0.028;
+            ctx.fillText(ch,cx+jx,o.y+li*lineH+jy);
+            cx+=ctx.measureText(ch).width;
+          }
+          cursorX=cx; cursorY=o.y+li*lineH;
+        } else {
+          ctx.fillText(s,o.x,o.y+li*lineH);
+          cursorX=o.x+ctx.measureText(s).width; cursorY=o.y+li*lineH;
+        }
+      }
+    }
+    ctx.restore(); }
+  if(el>=o.hStart && handOK){
+    const hp=cl01((el-o.hStart)/o.hDur), hf=1-cl01((el-o.liftAt)/o.liftDur);   // mão sai após escrever
+    if(hf>0){
+      const hb=boil(now,o.handH*0.017,0.02);
+      const scrib=writing?Math.sin((now/1000)*BOIL_FPS*2*Math.PI)*(o.handH*0.033):0;
+      ctx.save(); ctx.globalAlpha=hf; ctx.translate(cursorX+hb.dx,cursorY+hb.dy+scrib); ctx.rotate(hb.rot);
+      composeHandC(hp*PMAX); const dh=o.handH,dw=dh*handAR;
+      ctx.imageSmoothingEnabled=true; ctx.drawImage(handBuf,-HAND_TIP_X*dw,-HAND_TIP_Y*dh,dw,dh);
+      ctx.restore();
+    }
+  }
+}
+// mão escreve "Era uma vez…" DENTRO da tela (sobre a menina), depois some
+function drawWriting(el,R){
+  handWrite(el,{ text:TEXT, fontPx:R.h*0.14, x:R.x+R.w*0.18, y:R.y+R.h*0.21,  // mais pra direita (pedido)
+    tStart:T.wStart, tDur:T.wDur, hStart:T.hStart, hDur:T.hDur,
+    liftAt:T.hLift, liftDur:T.hLiftDur, fadeAt:T.wFade, fadeDur:T.wFadeDur, handH:R.h*0.36 });
+}
+
+/* ---------- tempo ---------- */
+const BOIL_FPS=8, PMAX=1.15;
+function boil(now, ampPx, ampRot){        // tremor de linha do close-up (8fps)
+  const s=Math.floor((now/1000)*BOIL_FPS);
+  return { dx:(hash(s*13+1,7)-0.5)*2*ampPx, dy:(hash(s*7+5,3)-0.5)*2*ampPx, rot:(hash(s*17+2,11)-0.5)*2*ampRot }; }
+const T={ fade:0.35, revealStart:0.25, reveal:2.0, onAt:2.35, zoomStart:2.95, zoomDur:3.2,
+          sceneAt:6.9, sceneFade:0.7, girlReveal:1.1,
+          hStart:8.4, hDur:0.8, wStart:9.1, wDur:2.6,              // mão escreve dentro da tela
+          hLift:11.7, hLiftDur:0.5, wFade:13.7, wFadeDur:1.0,      // mão sai; texto some 2s após escrever
+          // cena 2
+          pushAt:15.0, pushDur:2.8,                                // câmera empurra a moldura pra fora
+          standAt:15.4, standDur:1.4,                              // menina levanta (frames 1..11)
+          bookAt:15.4, bookDur:2.4,                                // folha vira livro
+          riffleAt:18.6,                                           // livro começa a folhear
+          // cena 2b
+          pagesAt:21.0,                                            // folhas começam a sair do livro
+          zoutAt:21.2, zoutDur:6.0,                                // câmera afasta devagar (menina menor)
+          walkAt:24.5,                                             // menina anda -> carrossel desliza
+          // cena 2c
+          futAt:24.0,                                              // a partir daqui os futuros podem pintar
+          qHand:26.5 };                                            // início da sequência da narração (QSEQ)
+// agenda da narração: tempos derivados do tamanho de cada frase (escrita ~0.07s/letra,
+// segura 2.6s, fade 1.2s, respiro 0.5s antes da próxima; a última segura mais 4s)
+const QSEQ=(()=>{ const a=[]; let t=T.qHand;
+  for(const q of QUOTES){ const n=q.replace(/\n/g,'').length;
+    const wDur=Math.max(2.4,n*0.07), start=t+0.7, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+2.6, fadeDur:1.2 });
+    t=end+2.6+1.2+0.5; }
+  a[a.length-1].fade+=4;                        // a última respira mais antes de sair
+  return a; })();
+// cena 3: o rebobinar começa quando a última frase terminou de sumir; a velocidade parte de
+// 1x (reverso) e cresce exponencialmente até o tempo virtual chegar a 0 -> corte pra cena 3
+T.rewAt=QSEQ[QSEQ.length-1].fade+QSEQ[QSEQ.length-1].fadeDur+0.8;
+const REW_END=T.rewAt+Math.log(1+REW_A*T.rewAt)/REW_A;   // instante real em que o rewind zera
+let t0=performance.now();
+/* ---------- player de scrub (ajustes; barra some quando o mouse sai) ---------- */
+const DUR=REW_END+S6F.at+8;                              // fim nominal: a frase montada + respiro
+const bar=document.getElementById('bar'), tm=document.getElementById('tm'), pp=document.getElementById('pp');
+bar.max=Math.ceil(DUR*10);
+let paused=false, pausedEl=0;
+const fmtT=s=>{ s=Math.max(0,s); return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); };
+function curEl(){ return paused?pausedEl:(performance.now()-t0)/1000; }
+function seekTo(s){ s=Math.max(0,Math.min(DUR,s));       // seek: o estado é todo função de el,
+  pausedEl=s; t0=performance.now()-s*1000;               // só o gatilho dos futuros precisa zerar
+  futStart=[]; cv.style.filter=''; }
+function togglePause(){ if(paused){ t0=performance.now()-pausedEl*1000; }
+  else pausedEl=(performance.now()-t0)/1000;
+  paused=!paused; pp.textContent=paused?'▶':'⏸'; }
+bar.addEventListener('input',()=>seekTo(bar.value/10));
+bar.addEventListener('change',()=>bar.blur());           // solta o foco pra barra voltar a acompanhar
+pp.addEventListener('click',togglePause);
+window.__el=()=>curEl();                                 // cronômetro p/ capturas
+window.__seek=s=>seekTo(s);                              // pula pra um tempo (testes)
+window.__s3=e=>seekTo(REW_END+e);                        // pula pra um tempo DA CENA 3 (testes)
+function replay(){ seekTo(0); if(paused) togglePause(); }
+const cl01=t=>t<0?0:t>1?1:t;
+function easeIO(t){ return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+
+function paintStatic(el,R){
+  const step=Math.floor(el*STATIC_FPS); if(step!==stStep){ regenStatic(step); stStep=step; }
+  ctx.imageSmoothingEnabled=false; ctx.drawImage(ST,R.x,R.y,R.w,R.h); ctx.imageSmoothingEnabled=true;
+  ctx.globalAlpha=0.10; ctx.fillStyle='#000';                              // scanlines
+  for(let y=R.y; y<R.y+R.h; y+=3) ctx.fillRect(R.x,y,R.w,1); ctx.globalAlpha=1;
+}
+function drawScreen(el,R){
+  ctx.save();
+  if(cl01((el-T.pushAt)/T.pushDur)<1){ roundRect(ctx,R); ctx.clip(); }  // TV fora = mundo aberto
+  if(el<T.onAt){ ctx.fillStyle='#2a2a2a'; ctx.fillRect(R.x,R.y,R.w,R.h); }         // apagada
+  else if(el-T.onAt<0.10){ ctx.fillStyle='#efece2'; ctx.fillRect(R.x,R.y,R.w,R.h); } // flash
+  else if(el<T.sceneAt){ paintStatic(el,R); }                                       // estática
+  else {                                                                             // sintoniza -> cena
+    const sf=cl01((el-T.sceneAt)/T.sceneFade);
+    if(sf<1) paintStatic(el,R);
+    ctx.globalAlpha=sf; ctx.fillStyle=BG; ctx.fillRect(R.x,R.y,R.w,R.h); ctx.globalAlpha=1; // página entra
+    if(el>=T.pagesAt) drawPages(el,R);            // carrossel de folhas no FUNDO (atrás da menina)
+    if(el<T.standAt){
+      if(meninaOK){
+        const gp=easeIO(cl01((el-T.sceneAt-0.15)/T.girlReveal))*PMAX;               // menina surge (tinta)
+        const idx=Math.floor(el*BOIL_FPS)%MF;                                       // escrevendo a 8fps
+        composeGirl(idx,gp);
+        const gh=R.h*0.78, gw=gh, gx=R.x+R.w*0.5-gw*0.455, gy=R.y+R.h-gh-R.h*0.01;
+        ctx.globalAlpha=sf; ctx.imageSmoothingEnabled=true;
+        ctx.drawImage(girlBuf, gx,gy,gw,gh); ctx.globalAlpha=1;
+      }
+    } else if(levOK){                                                               // cena 2: levanta
+      const now=performance.now();
+      const b=boil(now,R.h*0.0035,0);
+      const sp=easeIO(cl01((el-T.standAt)/T.standDur));
+      const k=R.h*GIRL_H/LFH;
+      const gxc=R.x+R.w*(GIRL_X0+(GIRL_X1-GIRL_X0)*sp), gyc=R.y+R.h*GIRL_FY;
+      ctx.imageSmoothingEnabled=true;
+      if(el>=T.walkAt && walkOK){                                                   // andando (8fps)
+        const wi=Math.floor((el-T.walkAt)*BOIL_FPS)%WFN, kw=R.h*GIRL_H/WFH;
+        ctx.drawImage(walkImg, wi*WFW,0,WFW,WFH,
+          gxc-(WFW/2)*kw+b.dx, gyc-(WFH-4)*kw+b.dy, WFW*kw, WFH*kw);
+      } else {
+        const li=Math.min(11, 1+Math.floor((el-T.standAt)*LEV_FPS));                // pula f0 (tem papel)
+        ctx.drawImage(lev, li*LFW,0,LFW,LFH,
+          gxc-(LFW/2)*k+b.dx, gyc-LEV_ANCHOR_Y*k+b.dy, LFW*k, LFH*k);
+      }
+    }
+    if(el>=T.hStart) drawWriting(el,R);           // mão escreve "Era uma vez…" sobre a menina
+    if(el>=T.bookAt) drawBook(el,R);              // cena 2: folha vira livro e folheia
+  }
+  ctx.restore();
+}
+
+// cena 2b: deslocamento do "mundo" quando a menina anda (rampa suave de velocidade)
+function walkX(el,R){ if(el<T.walkAt) return 0; const t=el-T.walkAt, r=SCROLL_RAMP;
+  const d=t<r ? t*t/(2*r) : t-r/2; return R.w*SCROLL_V*d; }
+
+// contorno RABISCADO (4 arestas tortas com overshoot nas pontas, tremendo a 8fps)
+function sketchRect(w,h,seed,alpha){
+  const st=Math.floor(performance.now()/1000*BOIL_FPS);
+  const jj=(a,b)=>(hash(st*17+seed*31+a,b)-0.5);
+  const o=Math.min(w,h)*0.03, j=Math.min(w,h)*0.014;
+  const C=[[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]];
+  ctx.strokeStyle=`rgba(20,16,12,${alpha})`; ctx.lineWidth=Math.max(1.2,h*0.0045); ctx.lineCap='round';
+  for(let e=0;e<4;e++){
+    const A=C[e], B=C[(e+1)%4];
+    const dx=B[0]-A[0], dy=B[1]-A[1], L=Math.hypot(dx,dy), ux=dx/L, uy=dy/L;
+    const ax=A[0]-ux*o*(0.4+jj(e,1)), ay=A[1]-uy*o*(0.4+jj(e,2));   // pontas passam do canto
+    const bx=B[0]+ux*o*(0.4+jj(e,3)), by=B[1]+uy*o*(0.4+jj(e,4));
+    const mx=(A[0]+B[0])/2 - uy*j*jj(e,5)*5, my=(A[1]+B[1])/2 + ux*j*jj(e,6)*5;
+    ctx.beginPath(); ctx.moveTo(ax+j*jj(e,7),ay+j*jj(e,8));
+    ctx.quadraticCurveTo(mx,my,bx+j*jj(e,9),by+j*jj(e,10)); ctx.stroke();
+  }
+}
+// fita adesiva colada no canto de cima (como retrato na parede)
+function tapeAt(x,y,seed,alpha,s){
+  const ang=(x<0?1:-1)*Math.PI/4 + (hash(seed,3)-0.5)*0.22;
+  const tw=s*0.17, th=tw*0.40;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  ctx.fillStyle=`rgba(210,196,162,${0.85*alpha})`;
+  ctx.fillRect(-tw/2,-th/2,tw,th);
+  ctx.strokeStyle=`rgba(20,16,12,${0.3*alpha})`; ctx.lineWidth=Math.max(1,s*0.006);
+  ctx.strokeRect(-tw/2,-th/2,tw,th);
+  ctx.restore();
+}
+
+// cena 2b: folhas saem do livro (cor do livro -> cor do fundo) e formam o carrossel de "retratos"
+function drawPages(el,R){
+  if(el<T.pagesAt) return;
+  const now=performance.now(), wx=walkX(el,R)*PAR;
+  const ph=R.h*PAGE_H, pw=ph*PAGE_AR, by=R.y+R.h*PAGE_Y;
+  const kMax=Math.max(N_LAUNCH, Math.ceil((3.0+wx/R.w-PAGE_X0)/PAGE_GAP)+1);
+  for(let k=0;k<kMax;k++){
+    const slotX=R.x+R.w*(PAGE_X0+k*PAGE_GAP)-wx;
+    let x=slotX, y=by+(hash(k*17,3)-0.5)*R.h*0.05, sc=1, wh=1, al=1, rot=(hash(k*31,7)-0.5)*0.10;
+    let flying=false;
+    if(k<N_LAUNCH){                                        // as 6 primeiras nascem voando do livro
+      const lt=(el-T.pagesAt-k*LAUNCH_GAP)/FLIGHT;
+      if(lt<0) continue;
+      if(lt<1){ flying=true; const e=easeIO(lt), u=1-e;
+        const x0=R.x+R.w*BOOK_X-walkX(el,R), y0=R.y+R.h*(BOOK_Y-0.16);
+        const cxp=(x0+slotX)/2, cyp=Math.min(y0,by)-R.h*0.22;        // arco por cima
+        x=u*u*x0+2*u*e*cxp+e*e*slotX; y=u*u*y0+2*u*e*cyp+e*e*by;
+        sc=0.45+0.55*e; wh=e; al=0.35+0.65*e;
+        rot+=u*Math.sin(lt*9)*0.35;                                   // flutua girando no voo
+      }
+    }
+    if(!flying && (x<R.x-R.w*1.8 || x>R.x+R.w*2.8)) continue;
+    const b=boil(now+k*537,R.h*0.0035,0.012);
+    ctx.save(); ctx.translate(x+b.dx,y+b.dy); ctx.rotate(rot+b.rot); ctx.scale(sc,sc);
+    const cw=PAGE_C0.map((v,i)=>Math.round(v+(PAGE_BG[i]-v)*wh));   // cor do livro -> cor do FUNDO
+    ctx.fillStyle=`rgba(${cw[0]},${cw[1]},${cw[2]},${al})`;
+    ctx.fillRect(-pw/2,-ph/2,pw,ph);
+    drawFut(el,R,k,slotX,flying,wh,pw,ph);                 // futuro se pinta na folha (tinta)
+    sketchRect(pw,ph,k,0.9*al);                            // contorno rabiscado (2 passadas)
+    sketchRect(pw,ph,k+101,0.35*al);
+    if(wh>0.5){ const ta=(wh-0.5)*2*al, ts=Math.min(pw,ph);          // fitas nos cantos de cima
+      tapeAt(-pw/2,-ph/2,k*7+1,ta,ts); tapeAt(pw/2,-ph/2,k*13+5,ta,ts); }
+    ctx.restore();
+  }
+}
+
+// cena 2c: futuro se PINTA (tinta preta em fundo branco, via multiply — o branco some no papel)
+// dentro da folha k do carrossel, na ordem do roteiro; depois das 5 primeiras as artes REPETEM
+// em ciclo (k%5), cada folha nova pintando-se ao entrar. gatilho: a folha entrou no quadro
+// (slotX < FUT_TRIG) E a folha anterior já começou há FUT_STAGGER s.
+function drawFut(el,R,k,slotX,flying,wh,pw,ph){
+  const i=k%FUT_SRC.length;
+  const im=futImg[i]; if(!im._ok || flying || wh<1) return;   // só na folha assentada
+  if(futStart[k]===undefined){
+    const prevGone=slotX-R.w*PAGE_GAP < R.x-R.w*1.4;   // antecessora já saiu do quadro (ex.: após seek)
+    if(el>=T.futAt && slotX<R.x+R.w*FUT_TRIG &&
+       (k===0 || prevGone || (futStart[k-1]!==undefined && el>=futStart[k-1]+FUT_STAGGER))) futStart[k]=el;
+    return;
+  }
+  const p=easeIO(cl01((el-futStart[k])/FUT_PAINT))*PMAX;
+  let dw=pw*FUT_M, dh=dw*im.naturalHeight/im.naturalWidth;              // encaixa com margem
+  if(dh>ph*FUT_M){ dh=ph*FUT_M; dw=dh*im.naturalWidth/im.naturalHeight; }
+  ctx.imageSmoothingEnabled=true;
+  if(p<1.1){ composeFut(i,p); ctx.drawImage(futBuf,-dw/2,-dh/2,dw,dh); }   // buffer já vem multiplicado
+  else { ctx.globalCompositeOperation='multiply';                          // arte completa: <img> direto
+    ctx.drawImage(im,-dw/2,-dh/2,dw,dh); ctx.globalCompositeOperation='source-over'; }
+}
+
+// cena 2: a folha vira livro (folha_vira_livro, 1x) e depois folheia (livro_folheia, loop)
+function drawBook(el,R){
+  if(!bookTOK) return;
+  const bal=1-cl01((el-T.pagesAt-0.4)/BOOK_FADE);        // some enquanto as folhas saem dele
+  if(bal<=0) return;
+  const now=performance.now(), b=boil(now,R.h*0.003,0.006);
+  const tp=cl01((el-T.bookAt)/T.bookDur), te=easeIO(tp);
+  const ax=R.x+R.w*(PAPER_X+(BOOK_X-PAPER_X)*te)+b.dx-walkX(el,R);     // base (tween; sai andando)
+  const ay=R.y+R.h*(PAPER_Y+(BOOK_Y-PAPER_Y)*te)+b.dy;
+  const k0=R.w*PAPER_W/BT_W0, k1=R.w*BOOK_W/BT_W1, k=k0+(k1-k0)*te;    // escala (tween)
+  ctx.save(); ctx.translate(ax,ay); ctx.rotate(b.rot); ctx.imageSmoothingEnabled=true;
+  ctx.globalAlpha=bal;
+  const idleFrame=()=>{ const f=9+Math.floor(el*BOIL_FPS)%3;           // livro parado = boil f9..11
+    ctx.drawImage(bookT, f*BTW,0,BTW,BTH, -BT_AX[f]*k1,-BT_AY[f]*k1, BTW*k1, BTH*k1); };
+  if(tp<1){                                                            // transformação (5fps)
+    const f=Math.min(11,Math.floor((el-T.bookAt)*BOOK_FPS));
+    ctx.drawImage(bookT, f*BTW,0,BTW,BTH, -BT_AX[f]*k,-BT_AY[f]*k, BTW*k, BTH*k);
+  } else if(el<T.riffleAt || !bookROK){ idleFrame(); }
+  else {                                                               // folheia: vira,vira,pausa (3.5s)
+    const local=(el-T.riffleAt)%3.5;
+    if(local<2){ const kr=R.w*BOOK_W/BR_W, f=Math.min(7,Math.floor((local%1)*8));
+      ctx.drawImage(bookR, f*BRW,0,BRW,BRH, -BR_AX*kr,-BR_AY*kr, BRW*kr, BRH*kr); }
+    else idleFrame();
+  }
+  ctx.restore();
+}
+
+function drawTV(el){
+  const idx=Math.floor(el*BOIL_FPS)%3;               // boil: troca tv1/2/3
+  const img=tv[idx];
+  if(el<=T.reveal){                                   // sendo desenhada (tinta) — via multiply
+    const p=easeIO(cl01((el-T.revealStart)/(T.reveal-T.revealStart)))*PMAX;
+    ensureBuf(); tbx.setTransform(1,0,0,1,0,0); tbx.clearRect(0,0,tvBuf.width,tvBuf.height);
+    tbx.setTransform(DPR,0,0,DPR,0,0);
+    tbx.globalCompositeOperation='source-over'; tbx.drawImage(img,stage.x,stage.y,stage.w,stage.h);
+    tbx.globalCompositeOperation='destination-in'; tbx.imageSmoothingEnabled=true;
+    inkField.update(p); tbx.drawImage(inkField.canvas,stage.x,stage.y,stage.w,stage.h);
+    tbx.globalCompositeOperation='source-over';
+    ctx.globalCompositeOperation='multiply';
+    ctx.drawImage(tvBuf,0,0,cv.width,cv.height, 0,0,W,H);
+    ctx.globalCompositeOperation='source-over';
+  } else {
+    ctx.globalCompositeOperation='multiply';
+    ctx.drawImage(img,stage.x,stage.y,stage.w,stage.h);
+    ctx.globalCompositeOperation='source-over';
+  }
+}
+
+// cena 4 (início): o livro reaparece NA TELA da TV — fade in (pedido), transformação
+// folha->livro INTEIRA (12f a 5fps) e folheia em loop; quando livro_vira_celular.png
+// existir na pasta, a partir de T3.celAt ele se transforma no smartphone (12f, fim = boil).
+function drawBook3(e,now,R){
+  const al=cl01((e-T3.bookAt)/0.8);
+  const b=boil(now,R.h*0.006,0.006);
+  ctx.save(); ctx.globalAlpha=al; ctx.imageSmoothingEnabled=true;
+  if(grab._ok && e>=T3g.grabAt){ /* cena 4c: o celular passa a viver DENTRO do grid da menina */ }
+  else if(cel2._ok && e>=T3.reelsAt){                // cena 4b: reels -> spam (celular já no centro do palco)
+    const spam=cel3._ok && e>=T3.spamAt;
+    const img=spam?cel3:cel2;
+    const cw=img.naturalWidth/CEL_N, chh=img.naturalHeight;
+    const f=spam ? Math.min(CEL_N-1,Math.floor((e-T3.spamAt)*SPAM_FPS))   // empilha e SEGURA o fim
+                 : Math.floor((e-T3.reelsAt)*REELS_FPS)%CEL_N;            // like/share em loop
+    const shp=easeIO(cl01((e-T3.shrinkAt)/T3.shrinkDur));                 // cena 4c: ENCOLHE suave
+    const shF=1-(1-CEL4_F)*shp;                      // e desce pra altura da mão da menina
+    const k=R.w*CEL_K*(spam?SPAM_S:REELS_S)*shF;     // largura do celular casada com o strip anterior
+    let axp=stage.x+stage.w*(0.5+(CEL4_X-0.5)*shp), ayp=stage.y+stage.h*(0.5+(CEL4_Y-0.5)*shp);
+    if(spam){                                        // VIBRA por código conforme as mensagens chegam
+      const q=Math.floor(now/1000*VIB_HZ);
+      const amp=R.w*VIB_AMP*(0.35+0.65*Math.min(1,f/(CEL_N-1)))*shF;      // vibra menos ao encolher
+      axp+=(hash(q*3,17)-0.5)*2*amp; ayp+=(hash(q*7,31)-0.5)*2*amp;
+    }
+    ctx.translate(axp+b.dx,ayp+b.dy); ctx.rotate(b.rot);
+    ctx.drawImage(img, f*cw,0,cw,chh, -cw*k/2,-chh*k/2, cw*k, chh*k);
+  } else if(cel._ok && e>=T3.celAt){                 // livro -> celular
+    const cw=cel.naturalWidth/CEL_N, chh=cel.naturalHeight;
+    const tp=(e-T3.celAt)*CEL_FPS;
+    const f=tp<CEL_N ? Math.floor(tp) : CEL_N-3+Math.floor(e*BOIL_FPS)%3;   // fim: boil f10..12
+    const k=R.w*CEL_K, m=easeIO(cl01(tp/CEL_N));     // desliza suave pro CENTRO da tela
+    let axp=R.x+R.w*(CEL_X+(CEL_X1-CEL_X)*m), ayp=R.y+R.h*(CEL_Y+(CEL_Y1-CEL_Y)*m);
+    const m2=easeIO(cl01((e-T3.zoomAt)/T3.zoomDur)); // e, com a TV saindo, pro centro do PALCO
+    axp+=(stage.x+stage.w*0.5-axp)*m2; ayp+=(stage.y+stage.h*0.5-ayp)*m2;
+    ctx.translate(axp+b.dx,ayp+b.dy); ctx.rotate(b.rot);
+    ctx.drawImage(cel, f*cw,0,cw,chh, -cw*k/2,-chh*k/2, cw*k, chh*k);
+  } else if(bookTOK){
+    const bw=R.w*BOOK3_W, ax=R.x+R.w/2, ay=R.y+R.h*BOOK3_Y;
+    ctx.translate(ax+b.dx,ay+b.dy); ctx.rotate(b.rot);
+    const tp=(e-T3.bookAt)*BOOK_FPS;
+    if(tp<12){ const f=Math.min(11,Math.floor(tp)), k=bw/BT_W1;             // papel -> livro
+      ctx.drawImage(bookT, f*BTW,0,BTW,BTH, -BT_AX[f]*k,-BT_AY[f]*k, BTW*k,BTH*k);
+    } else if(bookROK){ const fr=Math.floor((e-T3.bookAt)*BOIL_FPS)%8, k=bw/BR_W;   // folheia
+      ctx.drawImage(bookR, fr*BRW,0,BRW,BRH, -BR_AX*k,-BR_AY*k, BRW*k,BRH*k); }
+  }
+  ctx.restore();
+}
+
+// cena 6 / estação 1 — @globo/GloboPop: moldura de celular com vídeo abstrato
+// fervendo + barra de progresso; a dupla acha a pista no chão (eco_pista,
+// p0–11 a 6fps, depois boil p12–15)
+function drawSt1(e,act,sx,now){
+  if(act<-S6.slide) return;
+  const ch=stage.h*ST1.celH, cw=ch*0.50;
+  const b=boil(now,stage.h*0.003,0.004);
+  ctx.save(); ctx.translate(sx+stage.w*ST1.celX+b.dx, stage.y+stage.h*ST1.celY+b.dy);
+  ctx.rotate(b.rot);
+  sketchRect(cw,ch,60,0.85); sketchRect(cw*0.99,ch*0.99,61,0.35);  // moldura 2 passadas
+  const st=Math.floor(now/1000*BOIL_FPS);
+  ctx.strokeStyle='rgba(30,24,18,0.55)'; ctx.lineWidth=Math.max(1.2,stage.h*0.003);
+  ctx.lineCap='round';
+  for(let k=0;k<5;k++){                                  // o "vídeo": riscos soltos
+    const yy=-ch*0.30+k*ch*0.13+(hash(st*7+k,11)-0.5)*ch*0.02;
+    const x0=-cw*0.32+(hash(st*13+k,5)-0.5)*cw*0.06;
+    const ln=cw*(0.30+hash(st*3+k,17)*0.30);
+    ctx.beginPath(); ctx.moveTo(x0,yy);
+    ctx.quadraticCurveTo(x0+ln/2,yy+(hash(st*11+k,7)-0.5)*ch*0.05,x0+ln,yy);
+    ctx.stroke();
+  }
+  if(act>0){                                             // barra de progresso (loop)
+    const pr=(act%4)/4;
+    ctx.lineWidth=Math.max(1.5,stage.h*0.0045);
+    ctx.beginPath(); ctx.moveTo(-cw*0.38,ch*0.40);
+    ctx.lineTo(-cw*0.38+cw*0.76*pr,ch*0.40); ctx.stroke();
+  }
+  ctx.restore();
+  if(ecoPista._ok && act>=ST1.sprAt){                    // a dupla acha a pista
+    const FW=ecoPista.naturalWidth/PISTA_N, FH=ecoPista.naturalHeight;
+    const tp=(act-ST1.sprAt)*ST1.fps;
+    const f=tp<12?Math.floor(tp):12+Math.floor(now/1000*BOIL_FPS)%4;
+    const k=stage.h*ST1.dupH/FH;
+    ctx.save(); ctx.imageSmoothingEnabled=true;
+    ctx.translate(sx+stage.w*ST1.dupX+b.dx, stage.y+stage.h*ST1.dupFY+b.dy);
+    ctx.drawImage(ecoPista, f*FW,0,FW,FH, -FW*k/2,-FH*k, FW*k, FH*k);
+    ctx.restore();
+  }
+}
+// cena 6 / estação 2 — g1: página de portal desenhada por código (manchete
+// escrita à mão + 2 colunas de risquinhos + foto hachurada) e o leitor de jornal
+function drawSt2(e,act,sx,now){
+  if(act<-S6.slide) return;
+  const ph=stage.h*ST2.pgH, pw=ph*0.74;
+  const px=sx+stage.w*ST2.pgX, py=stage.y+stage.h*ST2.pgY;
+  const b=boil(now,stage.h*0.003,0.004);
+  ctx.save(); ctx.translate(px+b.dx,py+b.dy); ctx.rotate(b.rot);
+  sketchRect(pw,ph,64,0.85); sketchRect(pw*0.99,ph*0.99,65,0.3);   // a página
+  const st=Math.floor(now/1000*BOIL_FPS);
+  ctx.strokeStyle='rgba(30,24,18,0.45)'; ctx.lineWidth=Math.max(1,stage.h*0.0022);
+  ctx.lineCap='round';
+  for(let c2=0;c2<2;c2++)                                // 2 colunas de "texto"
+    for(let k=0;k<7;k++){
+      const yy=-ph*0.06+k*ph*0.055+(hash(st*5+k+c2*31,7)-0.5)*ph*0.008;
+      const x0=-pw*0.38+c2*pw*0.42;
+      const ln=pw*0.32*(0.75+hash(st*3+k+c2*17,13)*0.25);
+      if(c2===1&&k<3) continue;                          // espaço da "foto"
+      ctx.beginPath(); ctx.moveTo(x0,yy);
+      ctx.quadraticCurveTo(x0+ln/2,yy+(hash(st*7+k+c2*11,5)-0.5)*ph*0.012,x0+ln,yy);
+      ctx.stroke();
+    }
+  ctx.save(); ctx.translate(pw*0.225,-ph*0.005);         // a "foto" da matéria
+  sketchRect(pw*0.30,ph*0.15,66,0.6);
+  ctx.globalAlpha=0.30;
+  for(let k=0;k<5;k++){ ctx.beginPath();                 // hachura
+    ctx.moveTo(-pw*0.13+k*pw*0.055,-ph*0.062); ctx.lineTo(-pw*0.10+k*pw*0.055,ph*0.062); ctx.stroke(); }
+  ctx.globalAlpha=1; ctx.restore();
+  ctx.restore();
+  if(act>=1.0){                                          // a MANCHETE (de verdade)
+    ctx.font=`${stage.h*0.030}px ${FONT}`;
+    const lines=ST2.man.split('\n'); let mw=0;
+    for(const L of lines){ const w2=ctx.measureText(L).width; if(w2>mw)mw=w2; }
+    handWrite(e,{ text:ST2.man, fontPx:stage.h*0.030, x:px-mw/2,
+      y:py-ph*0.335, tStart:e-act+1.5, tDur:1.6, hStart:e-act+1.0, hDur:0.5,
+      liftAt:e-act+3.3, liftDur:0.4, fadeAt:1e9, fadeDur:1,
+      handH:stage.h*0.030*2.6 });
+  }
+  if(ecoJornal._ok && act>=ST2.sprAt){                   // o leitor
+    const FW=ecoJornal.naturalWidth/JORNAL_N, FH=ecoJornal.naturalHeight;
+    const t=act-ST2.sprAt; let f;
+    if(t<ST2.read) f=Math.floor(now/1000*BOIL_FPS)%3;    // lendo (boil f0–2)
+    else { const tp=(t-ST2.read)*ST2.fps;                // pista cai -> pega
+      f=tp<5?3+Math.floor(tp):8+Math.floor(now/1000*BOIL_FPS)%4; }
+    const k=stage.h*ST2.ldrH/FH;
+    ctx.save(); ctx.imageSmoothingEnabled=true;
+    ctx.translate(sx+stage.w*ST2.ldrX+b.dx, stage.y+stage.h*ST2.ldrFY+b.dy);
+    ctx.drawImage(ecoJornal, f*FW,0,FW,FH, -FW*k/2,-FH*k, FW*k, FH*k);
+    ctx.restore();
+  }
+}
+// cena 6 / estação 3 — globoplay: telona 16:9, "novela" de riscos que CONGELA na
+// pausa (⏸ pop), casal de costas reage, mini anúncio sobe com a pista "com o"
+function drawSt3(e,act,sx,now){
+  if(act<-S6.slide) return;
+  const tw=stage.w*ST3.tvW, th=tw*0.56;
+  const tx=sx+stage.w*ST3.tvX, ty=stage.y+stage.h*ST3.tvY;
+  const b=boil(now,stage.h*0.003,0.004);
+  const paused=act>=ST3.pauseAt;
+  ctx.save(); ctx.translate(tx+b.dx,ty+b.dy); ctx.rotate(b.rot);
+  sketchRect(tw,th,70,0.85); sketchRect(tw*0.99,th*0.99,71,0.3);   // a telona
+  // a "novela": riscos que fervem ATÉ a pausa (depois congelam — desenho morto)
+  const st=Math.floor((paused?ST3.pauseAt:act)*BOIL_FPS)+7;
+  ctx.strokeStyle='rgba(30,24,18,0.5)'; ctx.lineWidth=Math.max(1.2,stage.h*0.0028);
+  ctx.lineCap='round';
+  for(let k=0;k<4;k++){
+    const yy=-th*0.26+k*th*0.15+(hash(st*7+k,11)-0.5)*th*0.03;
+    const x0=-tw*0.36+(hash(st*13+k,5)-0.5)*tw*0.05;
+    const ln=tw*(0.28+hash(st*3+k,17)*0.35);
+    ctx.beginPath(); ctx.moveTo(x0,yy);
+    ctx.quadraticCurveTo(x0+ln/2,yy+(hash(st*11+k,7)-0.5)*th*0.09,x0+ln,yy);
+    ctx.stroke();
+  }
+  ctx.beginPath();                                       // barra de progresso
+  ctx.moveTo(-tw*0.40,th*0.40);
+  ctx.lineTo(-tw*0.40+tw*0.80*Math.min(0.42,(act>0?act:0)*0.06),th*0.40); ctx.stroke();
+  if(paused){                                            // ⏸ pop
+    const pp=easeIO(cl01((act-ST3.pauseAt)/0.35));
+    const st2=Math.floor(now/1000*BOIL_FPS);
+    ctx.save(); ctx.scale(pp,pp); ctx.globalAlpha=0.85;
+    ctx.lineWidth=Math.max(2,stage.h*0.010); ctx.strokeStyle='#241f16';
+    for(let p2=0;p2<2;p2++) for(let pass=0;pass<2;pass++){
+      const jx=(hash(st2*5+p2*13+pass*29,7)-0.5)*th*0.015;
+      const xx=(p2?1:-1)*tw*0.035+jx;
+      ctx.beginPath(); ctx.moveTo(xx,-th*0.12+(hash(st2*3+pass,5)-0.5)*th*0.01);
+      ctx.lineTo(xx,th*0.12+(hash(st2*7+pass,11)-0.5)*th*0.01); ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+  ctx.restore();
+  if(act>=ST3.bannerAt){                                 // o mini anúncio sobe
+    const bp=easeIO(cl01((act-ST3.bannerAt)/0.7));
+    const bw=stage.w*0.24, bh=stage.h*0.075;
+    const bx=sx+stage.w*(ST3.tvX+0.02);                  // lower-third centrado
+    const by=stage.y+stage.h*ST3.scrapFrom[1]+stage.h*0.09*(1-bp);
+    ctx.save(); ctx.globalAlpha=bp; ctx.translate(bx,by);
+    ctx.fillStyle=BG5; ctx.fillRect(-bw/2,-bh/2,bw,bh);
+    sketchRect(bw,bh,74,0.75);
+    if(e<S6.at+2*S6.per+ST3.scrapAt){                    // o pedacinho no anúncio
+      const sw=stage.w*SCRAP_W*0.8, sh=stage.h*SCRAP_H*0.8;
+      ctx.save(); ctx.translate(-bw*0.24,0); ctx.rotate(-0.06);
+      ctx.fillStyle=AMAR; ctx.globalAlpha=0.92*bp;
+      ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.globalAlpha=bp;
+      sketchRect(sw,sh,75,0.7);
+      ctx.font=`${stage.h*SCRAP_PX*0.85}px ${FONT}`; ctx.fillStyle=AMAR_TXT;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('com o',0,sh*0.02); ctx.restore();
+    }
+    ctx.font=`${stage.h*0.026}px ${FONT}`; ctx.fillStyle='#3a2f22';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('a pista do capítulo…',bw*0.17,0);
+    ctx.restore();
+  }
+  if(ecoSofa._ok){                                       // o casal (na frente)
+    const FW=ecoSofa.naturalWidth/SOFA_N, FH=ecoSofa.naturalHeight;
+    let f;
+    if(act<ST3.pauseAt+0.2) f=Math.floor(now/1000*BOIL_FPS)%3;      // aconchegados
+    else { const tp=(act-ST3.pauseAt-0.2)*ST3.fps;                  // reação
+      f=tp<6?3+Math.floor(tp):9+Math.floor(now/1000*BOIL_FPS)%3; }
+    const k=stage.h*ST3.sofH/FH;
+    ctx.save(); ctx.imageSmoothingEnabled=true;
+    ctx.translate(sx+stage.w*ST3.sofX+b.dx, stage.y+stage.h*ST3.sofFY+b.dy);
+    ctx.drawImage(ecoSofa, f*FW,0,FW,FH, -FW*k/2,-FH*k, FW*k, FH*k);
+    ctx.restore();
+  }
+}
+// cena 6 / estação 4 — Viu: 2 shorts verticais com os influenciadores; a bolha
+// rabiscada em volta da moldura A estoura quando ele abre os braços
+function drawSt4(e,act,sx,now){
+  if(act<-S6.slide) return;
+  const mh=stage.h*ST4.mH, mw=mh*0.52;
+  const st=Math.floor(now/1000*BOIL_FPS);
+  const b=boil(now,stage.h*0.003,0.004);
+  const short=(cx,seed,img,t)=>{                         // uma moldura de short
+    ctx.save(); ctx.translate(cx+b.dx, stage.y+stage.h*ST4.mY+b.dy); ctx.rotate(b.rot);
+    sketchRect(mw,mh,seed,0.85);
+    ctx.strokeStyle='rgba(30,24,18,0.5)'; ctx.lineWidth=Math.max(1.2,stage.h*0.003);
+    ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-mw*0.36,mh*0.44);       // progresso do short
+    ctx.lineTo(-mw*0.36+mw*0.72*((t>0?t:0)%3)/3,mh*0.44); ctx.stroke();
+    if(img._ok && t>=0){                                 // o influenciador
+      const FW=img.naturalWidth/INF_N, FH=img.naturalHeight;
+      let f;
+      if(img===ecoInf2) f = t<1.6?Math.floor(now/1000*BOIL_FPS)%4
+        : t<1.9?4 : t<2.2?5 : 8+Math.floor(now/1000*BOIL_FPS)%2;   // fala->aponta->abre
+      else { const tp=(t-1.8)*5;
+        f = t<1.8?Math.floor(now/1000*BOIL_FPS)%4
+          : tp<4?4+Math.floor(tp) : 8+Math.floor(now/1000*BOIL_FPS)%4; }
+      const k=mh*0.88/FH;
+      ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(img, f*FW,0,FW,FH, -FW*k/2, mh*0.46-FH*k, FW*k, FH*k);
+    }
+    ctx.restore();
+  };
+  short(sx+stage.w*ST4.aX, 76, ecoInf2, act-ST4.sprAt);
+  short(sx+stage.w*ST4.bX, 77, ecoInf1, act-ST4.sprAt-ST4.bStag);
+  // a BOLHA em volta da moldura A — rabiscada, ferve, e ESTOURA no popAt
+  const bx=sx+stage.w*ST4.aX, by=stage.y+stage.h*ST4.mY;
+  const rx=mw*0.78, ry=mh*0.64;
+  ctx.save(); ctx.translate(bx,by);
+  ctx.strokeStyle='rgba(30,24,18,0.65)'; ctx.lineCap='round';
+  if(act<ST4.popAt){                                     // inteira (2 passadas)
+    ctx.lineWidth=Math.max(1.4,stage.h*0.0035);
+    for(let pass=0;pass<2;pass++){ ctx.beginPath();
+      for(let k=0;k<=26;k++){ const a=k/26*Math.PI*2;
+        const rj=1+(hash(st*11+k*7+pass*31,13)-0.5)*0.07;
+        const X=Math.cos(a)*rx*rj, Y=Math.sin(a)*ry*rj;
+        k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+      ctx.stroke(); }
+  } else if(act<ST4.popAt+0.5){                          // ESTOURA: cacos + tracinhos
+    const pp=(act-ST4.popAt)/0.5;
+    ctx.globalAlpha=1-pp; ctx.lineWidth=Math.max(1.4,stage.h*0.0035);
+    for(let k=0;k<8;k++){ const a=k/8*Math.PI*2+0.3;     // tracinhos radiais
+      const r1=1+pp*0.5, r2=1.18+pp*0.7;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*rx*r1,Math.sin(a)*ry*r1);
+      ctx.lineTo(Math.cos(a)*rx*r2,Math.sin(a)*ry*r2); ctx.stroke(); }
+    for(let k=0;k<4;k++){ const a0=k/4*Math.PI*2+0.9;    // cacos de arco
+      ctx.beginPath();
+      for(let j=0;j<=5;j++){ const a=a0+j/5*0.7;
+        const rj=(1+pp*0.35)*(1+(hash(k*17+j,7)-0.5)*0.06);
+        const X=Math.cos(a)*rx*rj, Y=Math.sin(a)*ry*rj;
+        j?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+      ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+  if(act>=1.0){                                          // "Fora da bolha"
+    ctx.font=`${stage.h*0.036}px ${FONT}`;
+    const lbl='"Fora da bolha"', mw2=ctx.measureText(lbl).width;
+    handWrite(e,{ text:lbl, fontPx:stage.h*0.036, x:bx-mw2/2,
+      y:stage.y+stage.h*ST4.lblY, tStart:e-act+1.4, tDur:1.0, hStart:e-act+1.0,
+      hDur:0.5, liftAt:e-act+2.6, liftDur:0.4, fadeAt:1e9, fadeDur:1,
+      handH:stage.h*0.036*2.5 });
+  }
+}
+// cena 6 / estação 5 — Movimento LED: a carta com linhas manuscritas ilegíveis;
+// a palavra escondida SE ACENDE em amarelo no meio do texto e voa pro rodapé
+function drawSt5(e,act,sx,now){
+  if(act<-S6.slide) return;
+  const ph=stage.h*ST5.pgH, pw=ph*0.72;
+  const px=sx+stage.w*ST5.pgX, py=stage.y+stage.h*ST5.pgY;
+  const b=boil(now,stage.h*0.003,0.004);
+  ctx.save(); ctx.translate(px+b.dx,py+b.dy); ctx.rotate(b.rot);
+  sketchRect(pw,ph,84,0.85); sketchRect(pw*0.99,ph*0.99,85,0.3);   // a carta
+  const st=Math.floor(now/1000*BOIL_FPS);
+  ctx.strokeStyle='rgba(30,24,18,0.45)'; ctx.lineWidth=Math.max(1,stage.h*0.0022);
+  ctx.lineCap='round';
+  for(let k=0;k<10;k++){                                 // o relato (linhas corridas)
+    const yy=-ph*0.36+k*ph*0.075+(hash(st*5+k,7)-0.5)*ph*0.006;
+    const x0=-pw*0.38, ln=pw*0.76*(k===9?0.45:0.85+hash(st*3+k,13)*0.15);
+    if(k===4){                                           // a linha da palavra: abre um vão
+      ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x0+pw*0.28,yy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x0+pw*0.62,yy); ctx.lineTo(x0+pw*0.76,yy); ctx.stroke();
+      continue; }
+    ctx.beginPath(); ctx.moveTo(x0,yy);
+    ctx.quadraticCurveTo(x0+ln/2,yy+(hash(st*7+k,5)-0.5)*ph*0.008,x0+ln,yy);
+    ctx.stroke();
+  }
+  if(act>=ST5.glowAt){                                   // a palavra se acende
+    const ga=cl01((act-ST5.glowAt)/0.6);
+    const wx=pw*0.07, wy=-ph*0.36+4*ph*0.075;
+    const sw=pw*0.30, sh=ph*0.075;
+    ctx.save(); ctx.translate(wx,wy); ctx.rotate(-0.02);
+    ctx.fillStyle=AMAR; ctx.globalAlpha=0.9*ga;
+    ctx.fillRect(-sw/2,-sh/2,sw,sh);
+    ctx.globalAlpha=ga; sketchRect(sw,sh,86,0.6);
+    ctx.font=`${stage.h*SCRAP_PX*0.9}px ${FONT}`; ctx.fillStyle=AMAR_TXT;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('saber.',0,sh*0.04); ctx.globalAlpha=1; ctx.restore();
+  }
+  ctx.restore();
+  if(ecoLeitura._ok && act>=ST5.sprAt){                  // quem realmente lê
+    const FW=ecoLeitura.naturalWidth/LEIT_N, FH=ecoLeitura.naturalHeight;
+    const t=act-ST5.sprAt; let f;
+    if(t<ST5.read) f=Math.floor(now/1000*BOIL_FPS)%3;    // lendo (boil f0–2)
+    else { const tp=(t-ST5.read)*ST5.fps;                // acha a palavra
+      f=tp<5?3+Math.floor(tp):8+Math.floor(now/1000*BOIL_FPS)%4; }
+    const k=stage.h*ST5.ldrH/FH;
+    ctx.save(); ctx.imageSmoothingEnabled=true;
+    ctx.translate(sx+stage.w*ST5.ldrX+b.dx, stage.y+stage.h*ST5.ldrFY+b.dy);
+    ctx.drawImage(ecoLeitura, f*FW,0,FW,FH, -FW*k/2,-FH*k, FW*k, FH*k);
+    ctx.restore();
+  }
+}
+// cena 6: os pedacinhos amarelos — voam da estação pro rodapé (fixo na câmera),
+// assentam num slot e a palavra da pista se escreve neles; ficam até o fim
+function drawScraps(e,now){
+  let slot=0;
+  for(let i=0;i<5;i++){
+    const w=S6_WORDS[i]; if(!w) continue;
+    const si=slot++, sc=S6SCRAP[i];
+    if(!sc) continue;
+    const t0=S6.at+i*S6.per+sc.at;
+    if(e<t0) continue;
+    const p=cl01((e-t0)/ST1.flyDur), q=easeIO(p);
+    const X0=stage.x+stage.w*sc.from[0], Y0=stage.y+stage.h*sc.from[1];
+    const X1=stage.x+stage.w*SCRAP_X[si], Y1=stage.y+stage.h*SCRAP_Y;
+    let X=X0+(X1-X0)*q, Y=Y0+(Y1-Y0)*q-Math.sin(Math.PI*q)*stage.h*0.10;
+    const qf=easeIO(cl01((e-S6F.at-si*0.25)/0.9));       // fecho: encaixa no centro
+    if(qf>0){ X+=(stage.x+stage.w*S6F.tgtX[si]-X)*qf;
+      Y+=(stage.y+stage.h*S6F.tgtY-Y)*qf; Y-=Math.sin(Math.PI*qf)*stage.h*0.08; }
+    const S=(0.45+0.55*q)*(1+S6F.grow*qf);
+    const sw=stage.w*SCRAP_W*S, sh=stage.h*SCRAP_H*S;
+    const b=boil(now,stage.h*0.0025,0.01);
+    ctx.save(); ctx.translate(X+b.dx,Y+b.dy);
+    ctx.rotate((hash(si*7,13)-0.5)*0.16*(1-0.7*qf)+(1-q)*0.6+b.rot);
+    ctx.fillStyle=AMAR; ctx.globalAlpha=0.92;
+    ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.globalAlpha=1;
+    sketchRect(sw,sh,80+si,0.7);
+    if(p>=1 || sc.early){                                // a palavra se revela
+      const wa=sc.early?1:cl01((e-t0-ST1.flyDur)/0.5);
+      ctx.font=`${stage.h*SCRAP_PX*S}px ${FONT}`; ctx.fillStyle=AMAR_TXT;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=wa; ctx.fillText(w,0,sh*0.02); ctx.globalAlpha=1;
+    }
+    ctx.restore();
+  }
+}
+// cena 3: TV de tubo anos 2000 surge no centro (saindo do borrão do rebobinar); na tela,
+// estática colorida + as referências (TV Cultura / TV Globinho) passando com blips de
+// estática entre elas. "dela saem luzes, letras, números e personagens" = próximo passo.
+function drawScene3(e,now){
+  ctx.save(); ctx.beginPath(); ctx.rect(stage.x,stage.y,stage.w,stage.h); ctx.clip();
+  // cena 5c: a página velha se ARRANCA — todo o mundo velho é desenhado dentro de um
+  // transform rígido (clipado ao pedaço à direita do rasgo) que sai voando; atrás fica
+  // a página nova e a tirinha serrilhada presa na "espiral"
+  const tearP=cl01((e-(T5b.tearAt+T5b.tearDraw))/T5b.tearDur);
+  const tearing=tearP>0;
+  const tearPath=(back)=>{ ctx.beginPath();
+    for(let i=0;i<TEAR.length;i++){ const X=stage.x+stage.w*TEAR[i][0], Y=stage.y+stage.h*TEAR[i][1];
+      i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    const bx=back? stage.x-stage.w*0.02 : stage.x+stage.w*1.02;
+    ctx.lineTo(bx,stage.y+stage.h*1.02); ctx.lineTo(bx,stage.y-stage.h*0.02); ctx.closePath(); };
+  const tearLine=(m,w,c,al)=>{ ctx.strokeStyle=c; ctx.lineWidth=w; ctx.globalAlpha=al;
+    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.beginPath();       // só a polilinha do rasgo
+    for(let i=0;i<=m;i++){ const X=stage.x+stage.w*TEAR[i][0], Y=stage.y+stage.h*TEAR[i][1];
+      i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.stroke(); ctx.globalAlpha=1; };
+  const stripA=1-cl01((e-T6.at)/T6.fadeDur);             // cena 6: a tirinha se esvai
+  if(tearing){
+    ctx.fillStyle=BG5; ctx.fillRect(stage.x,stage.y,stage.w,stage.h);   // página nova atrás
+    if(stripA>0){
+      ctx.save(); tearPath(true); ctx.clip();                           // tirinha (papel velho)
+      ctx.globalAlpha=stripA; ctx.fillStyle=BG;
+      ctx.fillRect(stage.x,stage.y,stage.w,stage.h);
+      ctx.globalAlpha=CRACK_DK[4]*stripA; ctx.fillStyle='#2b241a';
+      ctx.fillRect(stage.x,stage.y,stage.w,stage.h); ctx.globalAlpha=1; ctx.restore();
+      tearLine(TEAR.length-1,stage.h*0.007,'#fffdf6',0.9*stripA);       // serrilha da tirinha
+      tearLine(TEAR.length-1,stage.h*0.0022,'#4a4238',0.8*stripA);
+    }
+    ctx.save();                                                          // o pedaço ARRANCADO
+    const mm=tearP*tearP;                                                // acelera (arrancada)
+    ctx.translate(stage.w*1.55*mm, stage.h*0.12*mm);
+    const px=stage.x+stage.w*TEAR[0][0], py=stage.y;
+    ctx.translate(px,py); ctx.rotate(0.22*mm); ctx.translate(-px,-py);
+    tearPath(false); ctx.clip();
+  }
+  ctx.fillStyle=BG; ctx.fillRect(stage.x,stage.y,stage.w,stage.h);
+  const scx=stage.x+stage.w/2, scy=stage.y+stage.h/2;
+  const pop=easeIO(cl01(e/S3_POP)), pk=0.92+0.08*pop;              // TV "assenta" saindo do borrão
+  ctx.translate(scx,scy); ctx.scale(pk,pk); ctx.translate(-scx,-scy);
+  const R={ x:stage.x+stage.w*SCREEN3.x, y:stage.y+stage.h*SCREEN3.y,
+            w:stage.w*SCREEN3.w, h:stage.h*SCREEN3.h, r:stage.h*SCREEN3.r };
+  const tvestOK=tvest.every(im=>im._ok);
+  // cena 4: zoom NA TV (pivô = centro visual da tela, onde o celular assenta); a moldura
+  // sai dos arredores da visão e o celular fica sozinho no papel, SEM mudar de tamanho
+  const z=1+(Z4_MAX-1)*easeIO(cl01((e-T3.zoomAt)/T3.zoomDur));
+  const px=R.x+R.w*CEL_X1, py=R.y+R.h*CEL_Y1;
+  const Rz=z===1?R:{ x:px+(R.x-px)*z, y:py+(R.y-py)*z, w:R.w*z, h:R.h*z, r:R.r*z };
+  const t=e-REF_START; let ref=null, refP=1;
+  if(t>=0 && e<REF_END){ const per=REF_DUR+REF_BLIP, i=Math.floor(t/per)%TVREF_N, ph=t-Math.floor(t/per)*per;
+    if(ph>=REF_BLIP && tvRef[i]._ok){ ref=tvRef[i];               // sem arquivo = fica na estática
+      refP=easeIO(cl01((ph-REF_BLIP)/REF_PAINT))*PMAX; } }        // tinta a cada aparição
+  const estAlpha=e<REF_END?1:1-cl01((e-REF_END)/0.7);             // cena 3b: a estática SAI
+  const useEst=tvestOK && !ref && estAlpha>0;   // TV-com-estática BAKED quando nenhuma ref está no ar
+  ctx.save(); roundRect(ctx,Rz); ctx.clip();    // a janela da tela cresce junto com o zoom
+  if(ref){                             // desenho CENTRADO na tela (contain), tinta + bordas em degradê
+    composeRef(ref,refP);
+    const b=boil(now,R.h*0.004,0);
+    const s=Math.min(R.w/refBuf.width,R.h/refBuf.height)*REF_FIT;
+    const dw=refBuf.width*s, dh=refBuf.height*s;
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(refBuf,R.x+R.w/2-dw/2+b.dx,R.y+R.h/2-dh/2+b.dy,dw,dh);
+    ctx.globalAlpha=0.10; ctx.fillStyle='#000';                   // scanlines
+    for(let y=R.y;y<R.y+R.h;y+=3) ctx.fillRect(R.x,y,R.w,1); ctx.globalAlpha=1;
+  } else if(!useEst && e<REF_END){                                // estática só se não vier baked na TV
+    if(est2._ok){                                 // (fallback antigo: tira avulsa de EST_N frames)
+      const fw=est2.naturalWidth/EST_N, fh=est2.naturalHeight;
+      const fi=Math.floor(e*BOIL_FPS)%EST_N, st=Math.floor(e*STATIC_FPS);
+      const jx=(hash(st*13,5)-0.5)*R.w*0.02, jy=(hash(st*7,9)-0.5)*R.h*0.02;
+      const s=Math.max(R.w/fw,R.h/fh)*1.06, dw=fw*s, dh=fh*s;
+      ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(est2, fi*fw,0,fw,fh, R.x+R.w/2-dw/2+jx,R.y+R.h/2-dh/2+jy,dw,dh);
+      ctx.globalAlpha=0.10; ctx.fillStyle='#000';
+      for(let y=R.y;y<R.y+R.h;y+=3) ctx.fillRect(R.x,y,R.w,1); ctx.globalAlpha=1;
+    } else paintStatic(e,R);                                      // fallback: estática de código
+  }
+  if(e>=REF_END){                     // cena 3b: falas escritas no MEIO DA TELA, uma por vez
+    for(const q of Q3SEQ){
+      if(e<q.hand || e>=q.fade+q.fadeDur) continue;
+      ctx.font=`${R.h*Q3_PX}px ${FONT}`;
+      const lines=q.text.split('\n'); let mw=0;
+      for(const L of lines){ const w2=ctx.measureText(L).width; if(w2>mw)mw=w2; }
+      const lh=R.h*Q3_PX*1.25, y0=R.y+R.h*0.5-(lines.length-1)*lh/2+R.h*Q3_PX*0.35;
+      handWrite(e,{ text:q.text, fontPx:R.h*Q3_PX, x:R.x+R.w/2-mw/2, y:y0,   // bloco centrado
+        tStart:q.start, tDur:q.wDur, hStart:q.hand, hDur:0.7,
+        liftAt:q.lift, liftDur:0.4, fadeAt:q.fade, fadeDur:q.fadeDur,
+        handH:R.h*Q3_PX*2.6 });
+    }
+    if(e>=T3.bookAt) drawBook3(e,now,R);   // cena 4: o livro volta na tela
+  }
+  ctx.restore();
+  // a TV por cima (multiply): com estática BAKED (tvest) ou de tela vazia (tv, sob as
+  // refs/falas); na virada pras falas, a tvest esvanece por cima da tv (estAlpha)
+  const fi=Math.floor(now/1000*BOIL_FPS)%3, b=boil(now,stage.h*0.003,0.005);
+  if(z<Z4_MAX-0.01){                            // TV some dos arredores no fim do zoom
+    ctx.save();
+    ctx.translate(px,py); ctx.scale(z,z); ctx.translate(-px,-py);   // zoom só na TV
+    ctx.translate(scx+b.dx,scy+b.dy); ctx.rotate(b.rot); ctx.translate(-scx,-scy);
+    ctx.globalCompositeOperation='multiply'; ctx.imageSmoothingEnabled=true;
+    if(useEst && estAlpha<1){
+      ctx.drawImage(tv[fi],stage.x,stage.y,stage.w,stage.h);
+      ctx.globalAlpha=estAlpha; ctx.drawImage(tvest[fi],stage.x,stage.y,stage.w,stage.h); ctx.globalAlpha=1;
+    } else ctx.drawImage((useEst?tvest:tv)[fi],stage.x,stage.y,stage.w,stage.h);
+    ctx.globalCompositeOperation='source-over'; ctx.restore();
+  }
+  if(useEst){ ctx.save(); roundRect(ctx,R); ctx.clip();           // scanlines sobre a estática baked
+    ctx.globalAlpha=0.10; ctx.fillStyle='#000';
+    for(let y=R.y;y<R.y+R.h;y+=3) ctx.fillRect(R.x,y,R.w,1); ctx.globalAlpha=1; ctx.restore(); }
+  // cena 4c: a menina entra andando da DIREITA (sprites espelhados — ela olha pra esquerda)
+  // e para diante do celular; quando menina_pega.png existir, ela PEGA e vira pra si
+  if(e>=T3.walkAt){
+    // cena 5: a partir de freezeAt o MUNDO CONGELA — tempo e boil dos sprites travam
+    // (a narração/título continuam no tempo real; o título fica sendo a única coisa viva)
+    const eS=Math.min(e,T5.freezeAt), nowS=e<T5.freezeAt?now:T5.freezeAt*1e3;
+    const bg=boil(nowS,stage.h*0.0035,0);
+    ctx.save(); ctx.imageSmoothingEnabled=true;
+    const gx=stage.x+stage.w*Math.max(G4_X1, G4_X0-(eS-T3.walkAt)*WALK4_V);
+    const fy=stage.y+stage.h*G4_FY;
+    if(grab._ok && eS>=T3g.grabAt){                  // pega o celular (grid, espelhado)
+      const GFW=grab.naturalWidth/GRAB_N, GFH=grab.naturalHeight;
+      const tp=(eS-T3g.grabAt)*GRAB_FPS;
+      const f=tp<GRAB_N ? Math.floor(tp) : GRAB_N-3+Math.floor(eS*BOIL_FPS)%3; // fim: boil f10..12
+      const kg=stage.h*G4_H/(GFH*GRAB_GF);
+      ctx.translate(stage.x+stage.w*GRAB_X+bg.dx, fy+bg.dy); ctx.scale(-1,1);
+      ctx.drawImage(grab, f*GFW,0,GFW,GFH, -GFW*kg/2,-(GFH-GRAB_PAD)*kg, GFW*kg, GFH*kg);
+    } else if(eS<T3g.arrive && walkOK){              // andando (ciclo espelhado, 8fps)
+      const wi=Math.floor((eS-T3.walkAt)*BOIL_FPS)%WFN, kw=stage.h*G4_H/WFH;
+      ctx.translate(gx+bg.dx, fy+bg.dy); ctx.scale(-1,1);
+      ctx.drawImage(walkImg, wi*WFW,0,WFW,WFH, -WFW*kw/2,-(WFH-4)*kw, WFW*kw, WFH*kw);
+    } else if(levOK){                                // parada diante do celular (pose 11 + boil)
+      const k=stage.h*G4_H/LFH;
+      ctx.translate(gx+bg.dx, fy+bg.dy); ctx.scale(-1,1);
+      ctx.drawImage(lev, 11*LFW,0,LFW,LFH, -LFW*k/2,-LEV_ANCHOR_Y*k, LFW*k, LFH*k);
+    }
+    ctx.restore();
+    // cena 5a: a lampadinha de ideia sobre a cabeça dela (grid especulativo)
+    if(lamp._ok && e>=T5.lampAt){
+      const LW2=lamp.naturalWidth/LAMP_N, LH2=lamp.naturalHeight;
+      let f;
+      const t=e-T5.lampAt;
+      if(e<T5.tremAt) f = t<0.2?0 : t<0.4?1 : 2+Math.floor(nowS/1000*BOIL_FPS)%3;      // acende + boil acesa
+      else if(e<T5.crackAt) f = 5+Math.floor(nowS/1000*BOIL_FPS*1.5)%2;                // TREME (p6/7)
+      else { const tc=e-T5.crackAt;
+        f = tc<0.35?7 : tc<0.70?8 : tc<1.05?9 : 10+Math.floor(nowS/1000*BOIL_FPS)%2; } // trinca->racha->apaga->morta
+      const kl=stage.h*LAMP_H/LH2;
+      let jx=0,jy=0;
+      if(e>=T5.tremAt && e<T5.crackAt){                                                // tremor por código
+        const q=Math.floor(nowS/1000*VIB_HZ);
+        jx=(hash(q*5,23)-0.5)*stage.h*0.008; jy=(hash(q*11,7)-0.5)*stage.h*0.008;
+      }
+      ctx.save(); ctx.imageSmoothingEnabled=true;
+      ctx.translate(stage.x+stage.w*LAMP_X+jx+bg.dx, stage.y+stage.h*LAMP_Y+jy+bg.dy);
+      ctx.drawImage(lamp, f*LW2,0,LW2,LH2, -LW2*kl/2,-LH2*kl/2, LW2*kl, LH2*kl);
+      ctx.restore();
+    }
+    // cena 5b: o PAPEL racha junto com a lâmpada — rachaduras ABRUPTAS (3 degraus) +
+    // escurecimento; ficam até o fim (o título é escrito por cima, vivo)
+    if(e>=T5.crackAt){
+      let step=Math.min(2,Math.floor((e-T5.crackAt)/0.35));
+      if(e>=T5b.crack2At) step=Math.min(4,3+Math.floor((e-T5b.crack2At)/0.4)); // pós-título: cresce
+      ctx.save(); ctx.strokeStyle='#241f16'; ctx.lineJoin='round'; ctx.lineCap='round';
+      for(const c of CRACKS){
+        if(c.step>step) continue;
+        ctx.globalAlpha=0.8;
+        for(let i=1;i<c.p.length;i++){                                 // afina até a ponta
+          ctx.lineWidth=Math.max(0.8,stage.h*0.0034*(1-i/c.p.length));
+          ctx.beginPath();
+          ctx.moveTo(stage.x+stage.w*c.p[i-1][0],stage.y+stage.h*c.p[i-1][1]);
+          ctx.lineTo(stage.x+stage.w*c.p[i][0],  stage.y+stage.h*c.p[i][1]);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha=CRACK_DK[step]; ctx.fillStyle='#2b241a';         // o papel escurece
+      ctx.fillRect(stage.x,stage.y,stage.w,stage.h);
+      ctx.restore();
+    }
+  }
+  // cena 4: narração escrita à mão na coluna esquerda do papel; no fim, "por isso,
+  // existe" + o TÍTULO em destaque (ficam — o título com letras fervendo a 8fps)
+  if(e>=T3.reelsAt){
+    ctx.font=`${stage.h*Q4_PX}px ${FONT}`;
+    for(const q of Q4SEQ){
+      if(e<q.hand || e>=q.fade+q.fadeDur) continue;
+      const lines=q.text.split('\n'); let mw=0;
+      for(const L of lines){ const w2=ctx.measureText(L).width; if(w2>mw)mw=w2; }
+      handWrite(e,{ text:q.text, fontPx:stage.h*Q4_PX, x:stage.x+stage.w*Q4_CX-mw/2,
+        y:stage.y+stage.h*Q4_Y, tStart:q.start, tDur:q.wDur, hStart:q.hand, hDur:0.7,
+        liftAt:q.lift, liftDur:0.4, fadeAt:q.fade, fadeDur:q.fadeDur,
+        handH:stage.h*Q4_PX*2.6 });
+    }
+    if(e>=T4.leadAt){                                             // "por isso, existe" (fica)
+      ctx.font=`${stage.h*Q4_PX}px ${FONT}`;
+      const mw=ctx.measureText(Q4_LEAD).width;
+      handWrite(e,{ text:Q4_LEAD, fontPx:stage.h*Q4_PX, x:stage.x+stage.w*TITLE_CX-mw/2,
+        y:stage.y+stage.h*LEAD_Y, tStart:T4.leadStart, tDur:T4.leadDur,
+        hStart:T4.leadAt, hDur:0.6, liftAt:T4.leadStart+T4.leadDur+0.2, liftDur:0.4,
+        fadeAt:1e9, fadeDur:1, handH:stage.h*Q4_PX*2.6 });
+    }
+    // cena 5c: o rasgo se DESENHA sobre o mundo velho (antes da arrancada)
+    if(e>=T5b.tearAt && !tearing){
+      const m=Math.max(1,Math.floor(cl01((e-T5b.tearAt)/T5b.tearDraw)*(TEAR.length-1)));
+      tearLine(m,stage.h*0.009,'#fffdf6',0.9);                    // fibra do papel
+      tearLine(m,stage.h*0.0025,'#3a332a',0.9);
+    }
+    if(tearing){                                                  // borda do pedaço que sai
+      tearLine(TEAR.length-1,stage.h*0.010,'#fffdf6',0.95);
+      tearLine(TEAR.length-1,stage.h*0.0025,'#4a4238',0.8);
+      ctx.restore();                                              // FIM do mundo velho
+    }
+    if(e>=T4.titleAt){                                            // O TÍTULO (fica, em destaque —
+      ctx.font=`${stage.h*TITLE_PX}px ${FONT}`;                   // NÃO sai com a página: vivo)
+      const mw=ctx.measureText(TITLE).width;
+      handWrite(e,{ text:TITLE, fontPx:stage.h*TITLE_PX, x:stage.x+stage.w*TITLE_CX-mw/2,
+        y:stage.y+stage.h*TITLE_Y, tStart:T4.titleStart, tDur:T4.titleDur,
+        hStart:T4.titleAt, hDur:0.6, liftAt:T4.titleStart+T4.titleDur+0.2, liftDur:0.5,
+        fadeAt:T6.at, fadeDur:T6.fadeDur, handH:stage.h*TITLE_PX*2.4, perLetter:true });
+    }
+    // cena 5d: a página nova — campanha + o fecho
+    if(e>=CSEQ[0].hand){                                          // campanha escrita à mão
+      ctx.font=`${stage.h*CAMP_PX}px ${FONT}`;
+      for(const q of CSEQ){
+        if(e<q.hand || e>=q.fade+q.fadeDur) continue;
+        const lines=q.text.split('\n'); let mw=0;
+        for(const L of lines){ const w2=ctx.measureText(L).width; if(w2>mw)mw=w2; }
+        handWrite(e,{ text:q.text, fontPx:stage.h*CAMP_PX, x:stage.x+stage.w*0.5-mw/2,
+          y:stage.y+stage.h*CAMP_Y, tStart:q.start, tDur:q.wDur, hStart:q.hand, hDur:0.7,
+          liftAt:q.lift, liftDur:0.4, fadeAt:q.fade, fadeDur:q.fadeDur,
+          handH:stage.h*CAMP_PX*2.6 });
+      }
+      if(e>=T5tag.at){                                            // o fecho, destacado (fica)
+        ctx.font=`${stage.h*TAG_PX}px ${FONT}`;
+        const mw=ctx.measureText(TAG).width;
+        handWrite(e,{ text:TAG, fontPx:stage.h*TAG_PX, x:stage.x+stage.w*TAG_CX-mw/2,
+          y:stage.y+stage.h*TAG_Y, tStart:T5tag.start, tDur:T5tag.dur, hStart:T5tag.at,
+          hDur:0.6, liftAt:T5tag.start+T5tag.dur+0.2, liftDur:0.5, fadeAt:T6.at,
+          fadeDur:T6.fadeDur, handH:stage.h*TAG_PX*2.4, perLetter:true });
+      }
+    }
+  }
+  // ---- cena 6: a caça à frase em 5 estações (deslizam pra direita; letreiro
+  // manuscrito viaja com cada estação, pedacinhos ficam fixos no rodapé)
+  if(e>=S6.at-0.5){
+    const off=s6off(e);
+    const vf=cl01((e-S6F.at)/0.8);                      // véu do fecho
+    if(vf<1) for(let i=0;i<5;i++){
+      const sx=stage.x+stage.w*(i-off);
+      if(sx<=stage.x-stage.w*1.02 || sx>=stage.x+stage.w*1.02) continue;
+      const arrive=S6.at+i*S6.per, act=e-arrive;
+      if(act>=0.1){                                     // letreiro (logo = caligrafia)
+        ctx.font=`${stage.h*S6_LTR_PX}px ${FONT}`;
+        const mw=ctx.measureText(S6_NAMES[i]).width;
+        handWrite(e,{ text:S6_NAMES[i], fontPx:stage.h*S6_LTR_PX,
+          x:sx+stage.w*0.5-mw/2, y:stage.y+stage.h*S6_LTR_Y,
+          tStart:arrive+0.5, tDur:0.9, hStart:arrive+0.1, hDur:0.5,
+          liftAt:arrive+1.6, liftDur:0.4, fadeAt:1e9, fadeDur:1,
+          handH:stage.h*S6_LTR_PX*2.4 });
+      }
+      if(i===0) drawSt1(e,act,sx,now);
+      if(i===1) drawSt2(e,act,sx,now);
+      if(i===2) drawSt3(e,act,sx,now);
+      if(i===3) drawSt4(e,act,sx,now);
+      if(i===4) drawSt5(e,act,sx,now);
+    }
+    if(vf>0){ ctx.globalAlpha=vf; ctx.fillStyle=BG5;    // a página cobre a estação
+      ctx.fillRect(stage.x,stage.y,stage.w,stage.h); ctx.globalAlpha=1; }
+    drawScraps(e,now);
+  }
+  const fl=1-cl01(e/S3_FLASH);                                    // flash do corte (a TV chega acesa)
+  if(fl>0){ ctx.globalAlpha=fl*0.85; ctx.fillStyle='#fff';
+    ctx.fillRect(stage.x,stage.y,stage.w,stage.h); ctx.globalAlpha=1; }
+  if(DEBUG){ ctx.strokeStyle='red'; ctx.lineWidth=2; roundRect(ctx,R); ctx.stroke(); }
+  ctx.restore();
+}
+
+function draw(now){
+  requestAnimationFrame(draw);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  if(tvN<3) return;
+  const elR=paused?pausedEl:(now-t0)/1000;
+  if(document.activeElement!==bar){ bar.value=Math.min(DUR,elR)*10;
+    tm.textContent=fmtT(elR)+' / '+fmtT(DUR); }
+  // cena 3 já começou?
+  if(elR>=REW_END){
+    const e3=elR-REW_END, b3=REW_BLUR*(1-cl01(e3/0.9));           // borrão termina de limpar na TV
+    cv.style.filter=b3>0.3?`blur(${b3.toFixed(1)}px)`:'';
+    drawScene3(e3,now); return;
+  }
+  // rebobinar: tempo virtual volta acelerando exponencialmente; borrão cresce com a velocidade
+  let el=elR;
+  if(elR>=T.rewAt){ const sp=Math.exp(REW_A*(elR-T.rewAt));
+    el=Math.max(0,T.rewAt-(sp-1)/REW_A);
+    const bl=Math.min(REW_BLUR,(sp-1)*0.35);
+    cv.style.filter=bl>0.3?`blur(${bl.toFixed(1)}px)`:'';
+  } else cv.style.filter='';
+
+  // câmera: zoom no centro da tela + puxa a tela pro centro do quadro
+  const R0=scr(), pvx=R0.x+R0.w/2, pvy=R0.y+R0.h/2;
+  const scx=stage.x+stage.w/2, scy=stage.y+stage.h/2;
+  const sFinal=stage.w*FRAME_FILL/R0.w;
+  const zt=easeIO(cl01((el-T.zoomStart)/T.zoomDur));
+  const pz=easeIO(cl01((el-T.pushAt)/T.pushDur));   // cena 2: empurra a moldura pra fora do quadro
+  const zo=easeIO(cl01((el-T.zoutAt)/T.zoutDur));   // cena 2b: afasta (menina menor, mais ar)
+  const zo2=easeIO(cl01((el-T.walkAt)/5.0));        // 2º afastamento suave quando ela anda
+  const s=(1+(sFinal-1)*zt)*(1+0.30*pz)*(1-ZOUT*zo)*(1-ZOUT2*zo2);
+  const Cx=pvx+zt*(scx-pvx),
+        Cy=pvy+zt*(scy-pvy)+stage.h*(ZOUT_DY*zo+ZOUT2_DY*zo2);         // segura o chão embaixo
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(stage.x,stage.y,stage.w,stage.h); ctx.clip();   // trava no quadro 16:9
+  ctx.globalAlpha=cl01(el/T.fade); ctx.fillStyle=BG; ctx.fillRect(stage.x,stage.y,stage.w,stage.h); ctx.globalAlpha=1;
+  ctx.translate(Cx,Cy); ctx.scale(s,s); ctx.translate(-pvx,-pvy);
+  if(el>T.reveal) drawScreen(el,R0);   // tela (estática) só depois de desenhada
+  if(pz<1) drawTV(el);                 // TV some do quadro com o empurrão; para de desenhar
+  if(DEBUG){ ctx.strokeStyle='red'; ctx.lineWidth=2/s; roundRect(ctx,R0); ctx.stroke();
+    ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(pvx,pvy,4/s,0,7); ctx.fill(); }
+  ctx.restore();
+
+  // cena 2c: narração — a mão escreve cada frase da QSEQ FIXA NA CÂMERA (coord. do palco),
+  // na faixa entre a base das folhas e o chão; uma some antes da próxima entrar
+  for(const q of QSEQ){
+    if(el<q.hand || el>=q.fade+q.fadeDur) continue;
+    ctx.save(); ctx.beginPath(); ctx.rect(stage.x,stage.y,stage.w,stage.h); ctx.clip();
+    handWrite(el,{ text:q.text, fontPx:stage.h*QUOTE_PX,
+      x:stage.x+stage.w*QUOTE_X, y:stage.y+stage.h*QUOTE_Y,
+      tStart:q.start, tDur:q.wDur, hStart:q.hand, hDur:0.8,
+      liftAt:q.lift, liftDur:0.5, fadeAt:q.fade, fadeDur:q.fadeDur,
+      handH:stage.h*QUOTE_PX*2.6 });
+    ctx.restore();
+  }
+}
+
+addEventListener('pointerdown',e=>{ if(e.target===cv) replay(); });   // clique no palco = repetir
+addEventListener('keydown',e=>{ const k=e.key.toLowerCase();
+  if(k==='r')replay(); if(k==='d')DEBUG=!DEBUG;
+  if(k===' '){ e.preventDefault(); togglePause(); }
+  if(e.key==='ArrowRight'){ e.preventDefault(); seekTo(curEl()+5); }
+  if(e.key==='ArrowLeft'){ e.preventDefault(); seekTo(curEl()-5); } });
+resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>o capítulo que falta — cena 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    -webkit-user-select:none;user-select:none;cursor:pointer;}
+  #c{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  #hint{position:fixed;left:12px;bottom:10px;font:13px/1.4 system-ui,sans-serif;
+    color:#666;opacity:.5;pointer-events:none;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">clique/R = repetir · D = calibrar mão</div>
+<script>
+(()=>{
+"use strict";
+
+/* ============================================================
+   "o capítulo que falta" — cena 1
+   1. preto (som de lápis)  2. folha pintada das bordas
+   3. mãozinha pinta e escreve "Era uma vez…" letra a letra,
+      balançando, com o pulso sumindo num degradê.
+   ============================================================ */
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0, H=0, DPR=1, DEBUG=false;
+
+/* ---------- CALIBRAGEM DA MÃO (ajustar quando tiver mao.png) ---------- */
+const HAND_SCALE  = 0.52;  // altura da mão relativa à folha
+const HAND_TIP_X  = 0.20;  // ponta do lápis (fração da largura da imagem)
+const HAND_TIP_Y  = 0.74;  // ponta do lápis (fração da altura da imagem)
+const SWAY_SPEED  = 9.0;   // velocidade do balanço
+const SWAY_AMP    = 0.045; // amplitude do balanço (rad, ~2.5°)
+// degradê do pulso (eixo do centro p/ canto inferior-direito; some no fim)
+const FADE_AX0=0.42, FADE_AY0=0.42, FADE_AX1=1.06, FADE_AY1=1.06, FADE_KEEP=0.5;
+
+/* ---------- palco 16:9 (contain) ---------- */
+const AR = 16/9;
+let stage = {x:0,y:0,w:0,h:0};
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  let w=W, h=W/AR; if(h>H){ h=H; w=H*AR; }
+  stage = { x:(W-w)/2, y:(H-h)/2, w, h };
+}
+window.addEventListener('resize', resize);
+
+/* ---------- ruído / campo de "pintura" ---------- */
+function hash(x,y){ let n=(x|0)*374761393+(y|0)*668265263; n=(n^(n>>13))*1274126177; return ((n^(n>>16))>>>0)/4294967295; }
+function sstep(t){ return t*t*t*(t*(t*6-15)+10); }
+function vnoise(x,y){ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=sstep(xf),v=sstep(yf);
+  const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);
+  return (a*(1-u)+b*u)*(1-v)+(c*(1-u)+d*u)*v; }
+function fbm(x,y){ let s=0,amp=.5,f=1; for(let o=0;o<4;o++){ s+=amp*vnoise(x*f,y*f); f*=2; amp*=.5; } return s; }
+
+// campo de reveal reutilizável (papel e mão). update(p) preenche a máscara.
+function makeField(fw,fh,nScale,edgeW,noiseW,soft){
+  const thr=new Float32Array(fw*fh);
+  const c=document.createElement('canvas'); c.width=fw; c.height=fh;
+  const cx=c.getContext('2d'); const id=cx.createImageData(fw,fh);
+  let mx=0;
+  for(let j=0;j<fh;j++) for(let i=0;i<fw;i++){
+    const nx=i/(fw-1), ny=j/(fh-1);
+    const d=Math.min(nx,1-nx,ny,1-ny)*2;      // 0 borda -> ~1 centro
+    const t=d*edgeW + fbm(nx*nScale,ny*nScale)*noiseW;
+    thr[j*fw+i]=t; if(t>mx)mx=t;
+  }
+  for(let k=0;k<thr.length;k++) thr[k]/=mx;
+  return { canvas:c, update(p){
+    const px=id.data;
+    for(let k=0;k<thr.length;k++){ let a=(p-thr[k])/soft; a=a<0?0:a>1?1:a;
+      const o=k*4; px[o]=px[o+1]=px[o+2]=0; px[o+3]=(a*255)|0; }
+    cx.putImageData(id,0,0);
+  }};
+}
+
+/* ---------- papel ---------- */
+const paper=new Image(); let paperOK=false; paper.onload=()=>paperOK=true; paper.src='papel.png';
+const paperField = makeField(320,180, 5, 1.0, 0.55, 0.10);
+const scene=document.createElement('canvas'); const sctx=scene.getContext('2d');
+
+/* ---------- mão ---------- */
+const handImg=new Image(); let handOK=false, handAR=0.7;
+let handBaked, handBuf, hbctx, handField, WB=0, HB=0;
+handImg.onload=()=>{
+  handAR = handImg.naturalWidth/handImg.naturalHeight;
+  WB = Math.min(handImg.naturalWidth, 720); HB = Math.round(WB/handAR);
+  // baked: imagem + degradê do pulso (transparente no antebraço)
+  handBaked=document.createElement('canvas'); handBaked.width=WB; handBaked.height=HB;
+  const hbk=handBaked.getContext('2d');
+  hbk.drawImage(handImg,0,0,WB,HB);
+  // grafite: escurece traço claro -> mata o "branco" no pulso, deixa inky (estilo aquarela)
+  hbk.globalCompositeOperation='source-atop';
+  hbk.fillStyle='rgba(40,33,27,0.7)'; hbk.fillRect(0,0,WB,HB);
+  hbk.globalCompositeOperation='source-over';
+  const g=hbk.createLinearGradient(WB*FADE_AX0,HB*FADE_AY0, WB*FADE_AX1,HB*FADE_AY1);
+  g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(FADE_KEEP,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  hbk.globalCompositeOperation='destination-in'; hbk.fillStyle=g; hbk.fillRect(0,0,WB,HB);
+  hbk.globalCompositeOperation='source-over';
+  handBuf=document.createElement('canvas'); handBuf.width=WB; handBuf.height=HB; hbctx=handBuf.getContext('2d');
+  handField=makeField(Math.max(40,WB>>2), Math.max(40,HB>>2), 6, 1.0, 0.6, 0.12);
+  handOK=true;
+};
+handImg.src='mao.png';
+
+function composeHand(p){                     // handBuf = mão recortada pela máscara de pintura
+  hbctx.setTransform(1,0,0,1,0,0); hbctx.clearRect(0,0,WB,HB);
+  hbctx.globalCompositeOperation='source-over'; hbctx.drawImage(handBaked,0,0);
+  hbctx.globalCompositeOperation='destination-in'; hbctx.imageSmoothingEnabled=true;
+  handField.update(p); hbctx.drawImage(handField.canvas,0,0,WB,HB);
+  hbctx.globalCompositeOperation='source-over';
+}
+
+/* ---------- texto ---------- */
+const TEXT="Era uma vez…";
+const FONT="'Caveat', cursive";
+
+/* ---------- linha do tempo (segundos) ---------- */
+const T={ hold:0.45, paper:2.4, handStart:2.85, handDur:1.0, writeStart:3.85, writeDur:2.6 };
+const PMAX=1.15;
+let t0=performance.now();
+function replay(){ t0=performance.now(); }
+function easeIO(t){ return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+const cl01=t=>t<0?0:t>1?1:t;
+
+// boil: tremor de linha estilo cartoon desenhado — troca a cada 1/BOIL_FPS s
+const BOIL_FPS=8;
+function boil(now, ampPx, ampRot){
+  const s=Math.floor((now/1000)*BOIL_FPS);
+  return { dx:(hash(s*13+1,7)-0.5)*2*ampPx,
+           dy:(hash(s*7+5,3)-0.5)*2*ampPx,
+           rot:(hash(s*17+2,11)-0.5)*2*ampRot };
+}
+
+function draw(now){
+  requestAnimationFrame(draw);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  if(!paperOK) return;
+  const el=(now-t0)/1000;
+
+  /* --- papel --- */
+  const pPaper = el<=T.hold ? 0 : easeIO(cl01((el-T.hold)/T.paper))*PMAX;
+  if(scene.width!==cv.width||scene.height!==cv.height){ scene.width=cv.width; scene.height=cv.height; }
+  sctx.setTransform(DPR,0,0,DPR,0,0); sctx.clearRect(0,0,W,H);
+  sctx.globalCompositeOperation='source-over'; sctx.drawImage(paper, stage.x,stage.y,stage.w,stage.h);
+  sctx.globalCompositeOperation='destination-in'; sctx.imageSmoothingEnabled=true;
+  paperField.update(pPaper); sctx.drawImage(paperField.canvas, stage.x,stage.y,stage.w,stage.h);
+  sctx.globalCompositeOperation='source-over';
+  ctx.drawImage(scene,0,0,cv.width,cv.height,0,0,W,H);
+
+  /* --- escrita PASSO A PASSO (letra a letra, ~8fps, nada suave) --- */
+  const fontPx = stage.h*0.12;
+  const textX  = stage.x + stage.w*0.16;
+  const baseY  = stage.y + stage.h*0.40;
+  ctx.font = `${fontPx}px ${FONT}`;
+  const chars = [...TEXT];
+  const wp = cl01((el-T.writeStart)/T.writeDur);      // linear: cadência regular
+  const shown = Math.floor(wp*chars.length);          // letras já escritas (pulo discreto)
+  const writing = el>=T.writeStart && shown<chars.length;
+  const shownStr = chars.slice(0,shown).join('');
+  const revealW = shownStr ? ctx.measureText(shownStr).width : 0;
+  const cursorX = textX + revealW;
+
+  if(shownStr){                                        // letras aparecem inteiras, com tremor sutil
+    const tb = boil(now, stage.h*0.0016, 0);
+    ctx.save();
+    ctx.translate(tb.dx, tb.dy);
+    ctx.fillStyle='#4a3b2c'; ctx.textBaseline='alphabetic';
+    ctx.fillText(shownStr, textX, baseY);
+    ctx.restore();
+  }
+
+  /* --- mão: pinta, treme (boil) e rabisca ao escrever --- */
+  if(el>=T.handStart){
+    const hp = cl01((el-T.handStart)/T.handDur);
+    const hb = boil(now, stage.h*0.004, 0.02);         // tremor de linha
+    const scrib = writing ? Math.sin((now/1000)*BOIL_FPS*2*Math.PI)*(stage.h*0.008) : 0; // rabisco vertical
+    ctx.save();
+    ctx.translate(cursorX + hb.dx, baseY + hb.dy + scrib);
+    ctx.rotate(hb.rot);
+    if(handOK){
+      composeHand(hp*PMAX);
+      const dh=stage.h*HAND_SCALE, dw=dh*handAR;
+      ctx.imageSmoothingEnabled=true;
+      ctx.drawImage(handBuf, -HAND_TIP_X*dw, -HAND_TIP_Y*dh, dw, dh);
+    } else {
+      // placeholder: lápis com a ponta na origem (mecânica visível sem mao.png)
+      const dh=stage.h*HAND_SCALE;
+      ctx.globalAlpha=hp; ctx.strokeStyle='#3a3a3a'; ctx.lineCap='round'; ctx.lineWidth=Math.max(3,dh*0.05);
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(dh*0.42,-dh*0.9); ctx.stroke();
+      ctx.fillStyle='rgba(70,70,70,.55)'; ctx.beginPath(); ctx.ellipse(dh*0.42,-dh*0.9,dh*0.13,dh*0.1,0,0,7); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    ctx.restore();
+    if(DEBUG){ ctx.fillStyle='red'; ctx.beginPath(); ctx.arc(cursorX,baseY,5,0,7); ctx.fill(); }
+  }
+}
+
+window.addEventListener('pointerdown', replay);
+window.addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='r')replay(); if(k==='d')DEBUG=!DEBUG; });
+
+resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
