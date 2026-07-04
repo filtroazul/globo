@@ -22,6 +22,11 @@
 >   puppeteer-core + ffmpeg; instruções e gotchas no cabeçalho do arquivo).
 >   Iagho vai pro capcut do celular → youtube (mandar como DOCUMENTO no whats).
 > - **HUD**: tecla H ou `?nohud=1` esconde player/hint; player mostra tempo real; `window.__dur`.
+> - **MÚSICA NO SITE (2026-07-04, sessão 5)**: `musica.mp3` (3:24, escolha do Iagho) toca
+>   junto da timeline no `index.html` — play/pausa/seek amarrados em `seekTo`/`togglePause`,
+>   resync de drift a cada 2s, `window.__mus` p/ testes. Autoplay é bloqueado pelo navegador:
+>   destrava no 1º clique/tecla (o clique-replay já resolve). Edição no capcut do celular
+>   em andamento (filtro CRT + sons de zap/rachadura/papel da biblioteca do capcut).
 > - **Jeito de trabalhar com o Iagho**: mudanças de pacing = propor CARDÁPIO com ganho
 >   em segundos e deixar ele escolher; "de pouco em pouco"; verificação visual sempre.
 >

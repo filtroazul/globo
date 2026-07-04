@@ -562,16 +562,27 @@ const fmtT=s=>{ s=Math.max(0,s); return Math.floor(s/60)+':'+String(Math.floor(s
 function curEl(){ return paused?pausedEl:(performance.now()-t0)/1000; }
 function seekTo(s){ s=Math.max(0,Math.min(DUR,s));       // seek: o estado é todo função de el,
   pausedEl=s; t0=performance.now()-s*1000;               // só o gatilho dos futuros precisa zerar
-  futStart=[]; cv.style.filter=''; }
+  futStart=[]; cv.style.filter=''; musSync(true); if(!paused) musPlay(); }
 function togglePause(){ if(paused){ t0=performance.now()-pausedEl*1000; }
   else pausedEl=(performance.now()-t0)/1000;
-  paused=!paused; pp.textContent=paused?'▶':'⏸'; }
+  paused=!paused; pp.textContent=paused?'▶':'⏸';
+  if(paused) MUS.pause(); else { musSync(true); musPlay(); } }
+/* ---------- música (acompanha a timeline: play/pausa/seek) ---------- */
+const MUS=new Audio('musica.mp3'); MUS.preload='auto';
+function musSync(force){ try{ if(force||Math.abs(MUS.currentTime-curEl())>0.35)
+  MUS.currentTime=Math.max(0,curEl()); }catch(_){} }     // antes do metadata carregar pode falhar
+function musPlay(){ MUS.play().catch(()=>{}); }          // autoplay pode ser negado — destrava no 1º gesto
+setInterval(()=>{ if(!paused&&!MUS.paused) musSync(); },2000); // corrige drift do relógio do áudio
+musPlay();
+const musUnlock=()=>{ if(!paused&&MUS.paused){ musSync(true); musPlay(); } };
+addEventListener('pointerdown',musUnlock); addEventListener('keydown',musUnlock);
 bar.addEventListener('input',()=>seekTo(bar.value/10));
 bar.addEventListener('change',()=>bar.blur());           // solta o foco pra barra voltar a acompanhar
 pp.addEventListener('click',togglePause);
 window.__el=()=>curEl();                                 // cronômetro p/ capturas
 window.__dur=DUR;                                        // duração da peça (pacing)
 window.__seek=s=>seekTo(s);                              // pula pra um tempo (testes)
+window.__mus=MUS;                                        // áudio (testes de sync)
 window.__s3=e=>seekTo(REW_END+e);                        // pula pra um tempo DA CENA 3 (testes)
 function replay(){ seekTo(0); if(paused) togglePause(); }
 const cl01=t=>t<0?0:t>1?1:t;
