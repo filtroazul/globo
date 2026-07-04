@@ -7,6 +7,24 @@
 >
 > ## ⭐ PRÓXIMA SESSÃO: COMECE EXATAMENTE AQUI
 >
+> **RESUMO DA SESSÃO 4 (2026-07-03/04)** — para QUALQUER sessão/conta nova:
+> - **Repos GitHub (push nos DOIS)**: `origin`=filtroazul/globo e `globe`=filtroazul/globe;
+>   o **site é o Pages do globe**: https://filtroazul.github.io/globe/ (tem `.nojekyll`;
+>   se o deploy travar com "Deployment failed, try again later", forçar rebuild via
+>   POST /repos/filtroazul/globe/pages/builds com o token do `git credential fill`).
+> - **PEÇA EM ~3:00,9 — META ≤3MIN BATIDA** (era 5:14). Como: timeline apertada a
+>   **1x UNIFORME** (holds/gaps/dwells/letra) + **texto enxugado 21→18 frases**
+>   (Marcela ainda precisa REVISAR a redação; integral no roteiro.md).
+>   ⚠️ time-warp/velocidade variável foi TESTADO e REPROVADO pelo Iagho — NÃO reintroduzir.
+>   ⚠️ NUNCA acelerar em edição de vídeo (boil 8fps vira ghost) — pacing sempre nos knobs.
+> - **MP4 1080p60 EXPORTADO** (Desktop: `o-capitulo-que-falta-1080p60.mp4`, 125MB,
+>   3:01, H.264 CRF16) via **`render_mp4.mjs`** (nesta pasta — relógio virtual +
+>   puppeteer-core + ffmpeg; instruções e gotchas no cabeçalho do arquivo).
+>   Iagho vai pro capcut do celular → youtube (mandar como DOCUMENTO no whats).
+> - **HUD**: tecla H ou `?nohud=1` esconde player/hint; player mostra tempo real; `window.__dur`.
+> - **Jeito de trabalhar com o Iagho**: mudanças de pacing = propor CARDÁPIO com ganho
+>   em segundos e deixar ele escolher; "de pouco em pouco"; verificação visual sempre.
+>
 > **ONDE ESTAMOS (2026-07-03): CENAS 1–6 COMPLETAS.** A cena 6 (caça à frase no
 > ecossistema Globo, 5 estações deslizando + fecho com a frase montada de
 > pedacinhos) foi TODA construída na sessão 3 — detalhes nos bullets ✅ abaixo e
