@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>o capítulo que falta — abertura TV</title>
+<title>o capítulo que falta </title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
@@ -45,6 +45,7 @@
    ============================================================ */
 
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+if(/nohud/.test(location.search)) document.body.classList.add('nohud'); // ?nohud=1 = palco limpo (exportação)
 let W=0,H=0,DPR=1,DEBUG=false;
 const BG='#f4efe3';                       // "página" onde a TV é desenhada
 
@@ -220,9 +221,9 @@ const QUOTES3=[
   "quando a tv chegou às casas do brasil,\nela também virou sala de aula.",
   "num país de analfabetismo e evasão escolar,\nela veio carregada de promessas.",
   "uma delas: democratizar o conhecimento.",
-  "a tecnologia mais atual daquele tempo\nensinando de um jeito acessível —\npela tela, pela história, pela fantasia.",
+  "a tecnologia mais atual daquele tempo\nensinando de um jeito acessível \npela tela, pela história, pela fantasia.",
   "e por aí o nosso saber\ncomeçou com sonhar alto.",
-  "com imaginar realidades\nque um dia virariam mundo.",
+  "com imaginar realidades\nque um dia ganhariam vida.",
   "porque aprender\ntambém é imaginar."
 ];
 const Q3SEQ=(()=>{ const a=[]; let t=REF_END+0.7;    // agenda auto-derivada (como a QSEQ)
@@ -355,7 +356,7 @@ const TEAR=(()=>{ const p=[], n=26;                      // o rasgo (irregular, 
 // cena 5d: a campanha escrita à mão na página nova
 const CAMP=[
   // enxugado 2026-07-03 (pacing; ideias preservadas)
-  "uma campanha que lembra:\nestudar faz histórias voarem alto.",
+  "uma campanha da qual lembra que\nestudar faz histórias voarem alto.",
   "que o saber não é obrigação da escola:\né abrir possibilidades pra vida."
 ];
 const CSEQ=(()=>{ const a=[]; let t=T5b.gone+0.2;      // campanha entra logo após o rasgo (dramático encurtado)
