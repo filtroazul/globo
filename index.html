@@ -376,7 +376,7 @@ const T6={ at:T5tag.start+T5tag.dur+1.8, fadeDur:1.0 };
 // personagens = grids eco_* (especulativos); a pista de cada estação é um
 // pedacinho AMARELO (callback da lâmpada) que voa pro rodapé e ACUMULA; no fim
 // os pedaços montam "Histórias começam com o saber."
-const S6={ at:T6.at+T6.fadeDur+0.5, dwell:5.4, slide:1.0 };
+const S6={ at:T6.at+T6.fadeDur+0.5, dwell:4.3, slide:1.0 };  // dwell curto (pedido) — slide na MESMA velocidade
 S6.per=S6.dwell+S6.slide;
 const S6_NAMES=["@globo / GloboPop","g1","globoplay","Viu","Movimento LED"];
 const S6_WORDS=["Histórias","começam","com o",null,"saber."];
@@ -393,34 +393,34 @@ const AMAR='#e2aa4e', AMAR_TXT='#4a3416';
 // estação 1 (@globo/GloboPop): moldura de celular com "vídeo" abstrato + a dupla
 // (eco_pista) acha a pista no chão; a pista voa pro rodapé e vira "Histórias"
 const ST1={ celX:0.30, celY:0.46, celH:0.55, dupX:0.66, dupFY:0.82, dupH:0.44,
-            sprAt:0.4, fps:6, scrapAt:3.6, flyDur:1.0, scrapFrom:[0.695,0.375] };
+            sprAt:0.4, fps:6, scrapAt:3.0, flyDur:1.0, scrapFrom:[0.695,0.375] };
 // estação 2 (g1): página de portal por código (manchete manuscrita + colunas de
 // risquinhos + foto hachurada) + leitor eco_jornal (lê em boil f0–2, aí a pista
 // cai do jornal f3–7 a 5fps, boil final f8–11); pista → "começam"
 const ecoJornal=ecoLoad('eco_jornal.png'); const JORNAL_N=12;
 const ST2={ pgX:0.29, pgY:0.46, pgH:0.60, ldrX:0.68, ldrFY:0.82, ldrH:0.46,
-            sprAt:0.4, read:1.2, fps:5, scrapAt:3.9, scrapFrom:[0.715,0.40],
+            sprAt:0.4, read:1.0, fps:5, scrapAt:3.3, scrapFrom:[0.715,0.40],
             man:"a educação de milhões de jovens\nfoi interrompida no meio" };
 // estação 3 (globoplay): telona com "novela" que PAUSA (o conteúdo congela — só a
 // moldura segue fervendo), ícone ⏸ pop, casal eco_sofa reage, e o MINI ANÚNCIO
 // sobe por baixo com o pedacinho "com o" (que voa pro rodapé já escrito)
 const ecoSofa=ecoLoad('eco_sofa.png'); const SOFA_N=12;
 const ST3={ tvX:0.33, tvY:0.34, tvW:0.46, sofX:0.345, sofFY:0.86, sofH:0.30,
-            pauseAt:1.8, fps:5, bannerAt:2.8, scrapAt:4.2, scrapFrom:[0.292,0.552] };
+            pauseAt:1.5, fps:5, bannerAt:2.3, scrapAt:3.4, scrapFrom:[0.292,0.552] };
 // estação 4 (Viu): 2 molduras verticais de vídeo curto, um influenciador em cada
 // (eco_influencer2 = perfil→frontal na A; eco_influencer = frontal na B, defasado);
 // uma BOLHA rabiscada envolve a moldura A e ESTOURA quando ele abre os braços
 // ("Fora da bolha" manuscrito embaixo). Sem pedacinho — o Viu convida a BUSCAR.
 const ecoInf1=ecoLoad('eco_influencer.png'), ecoInf2=ecoLoad('eco_influencer2.png');
 const INF_N=12;
-const ST4={ aX:0.29, bX:0.545, mY:0.44, mH:0.56, sprAt:0.4, bStag:0.5,
-            popAt:2.7, lblY:0.795 };
+const ST4={ aX:0.29, bX:0.545, mY:0.44, mH:0.56, sprAt:0.4, bStag:0.4,
+            popAt:2.4, lblY:0.795 };
 // estação 5 (Movimento LED): a carta/relato por código (linhas manuscritas
 // ilegíveis) — UMA palavra se acende em amarelo no meio do texto ("saber.",
 // sincronizada com a leitora eco_leitura descobrindo a dela) e voa pro rodapé
 const ecoLeitura=ecoLoad('eco_leitura.png'); const LEIT_N=12;
 const ST5={ pgX:0.30, pgY:0.44, pgH:0.58, ldrX:0.67, ldrFY:0.83, ldrH:0.42,
-            sprAt:0.4, read:1.2, fps:5, glowAt:2.6, scrapAt:4.2,
+            sprAt:0.4, read:1.0, fps:5, glowAt:2.2, scrapAt:3.4,
             scrapFrom:[0.345,0.475] };
 const S6SCRAP=[ {at:ST1.scrapAt, from:ST1.scrapFrom},
                 {at:ST2.scrapAt, from:ST2.scrapFrom},
