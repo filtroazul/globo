@@ -22,19 +22,19 @@
 >    asset novo a princípio) e a volta ao "Era uma vez…" (menina da cena 1
 >    continua escrevendo; a frase vira várias histórias). Fecho do filme já
 >    existe como beat na cena 5 — decidir se repete ou emenda.
-> 4. ✅ **PACING RESOLVIDO POR TIME-WARP** (2026-07-03, sessão 4): a peça agora roda em
->    **~3:01 REAIS** (timeline virtual segue 5:14 — nada foi cortado). Um mapa
->    tempo-real→tempo-da-timeline por segmentos (`SPEED`/`WARP` no código, logo após
->    `DUR`) acelera cada trecho: escrita a `V_WRITE:1.45` (legível), respiros
->    pós-frase a `V_HOLD:2.6` (público já leu), visuais 1.3–2.2x ("era uma vez"=1.3x
->    pedido; refs 1.9x; livro refolheia 2.2x; estações cena 6 a 2.0x; título/fecho
->    1.25–1.3x, dramáticos). O boil de linha usa `performance.now()` → segue 8fps DE
->    VERDADE nos trechos acelerados (por isso NÃO acelerar na edição de vídeo — vira
->    borrão/ghost). Player/barra/tempo agora em TEMPO REAL (`REDUR`≈180.9);
->    `__seek`/`__s3` continuam recebendo tempo DA TIMELINE (virtual); novos:
->    `window.__v()` (virtual atual) e `window.__redur`. Verificado com screenshots
->    nos 4 pontos-chave. ⚠️ quando as cenas 7–8 ENTRAREM, re-tunar a tabela SPEED
->    (conteúdo novo = mais tempo; teto continua 3min).
+> 4. **PACING: 5:14 → ~3:54 UNIFORME** (2026-07-03, sessão 4): ⚠️ a 1ª tentativa foi um
+>    TIME-WARP por trechos (velocidade variável) — o Iagho REPROVOU ("uma hora rapidão,
+>    outra normal, estranho") e foi TOTALMENTE REVERTIDO. NÃO reintroduzir velocidade
+>    variável. O que ficou: **timeline apertada nos knobs, tudo a 1x** — agendas de texto
+>    (QSEQ 0.055s/letra hold 1.4; Q3/Q4 0.04 hold 1.1; CSEQ 0.04 hold 1.4; leads 0.45–0.5,
+>    fades 0.65–0.9, gaps 0.2), abertura/cena2 encurtadas (sceneAt 5.9, pushAt 12.6,
+>    qHand 24.1 — offsets internos preservados), refs 1.15+0.15, T3 (livro refolheia em
+>    3.3s — pedido; reels Q3_END+7.4), título/tear/tag levemente, respiro T6 1.8,
+>    cena 6 dwell 5.4/slide 1.0 (STs internos re-sincronizados: scrapAts 3.6–4.2,
+>    pauseAt 1.8, popAt 2.7, glowAt 2.6), DUR fecho +7. `window.__dur` exposto.
+>    **⚠️ 3:00 em ponto NÃO FECHA a 1x uniforme sem mexer no texto**: são 21 frases
+>    (~1560 letras) = ~2:10 só de agendas de escrita legível. Opções em aberto com o
+>    casal: enxugar frases (Marcela) ou aceitar ~3:54. Re-tunar quando 7–8 entrarem.
 > **Jeito de trabalhar**: "de pouco em pouco" — um passo por vez no chat, prompt
 > de GPT pronto pra colar quando precisar de asset (frame a frame, anexar
 > `ultimo_frame.png`), fatiar/re-registrar/verificar com screenshot ANTES de
@@ -160,8 +160,8 @@
 >    "limpa", pause bars muito retas, timing dos dwells (7.5s por estação).
 > 3. **cenas 7–8** (páginas se preenchendo — reuso dos futuro_*.png; volta ao "Era
 >    uma vez…" com a menina escrevendo) + fecho do filme.
-> 4. ✅ pacing geral: RESOLVIDO por time-warp (ver item 4 do bloco ⭐ acima) —
->    ~3:01 reais sem cortar nada; re-tunar `SPEED` quando 7–8 entrarem.
+> 4. pacing geral: ~3:54 a 1x uniforme (knobs apertados; ver item 4 do bloco ⭐ —
+>    warp de velocidade foi reprovado/revertido; 3:00 exige enxugar texto).
 >
 > O que vem agora:
 >

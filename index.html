@@ -210,7 +210,7 @@ function composeRef(im,p){
 const SCREEN3={ x:0.135, y:0.275, w:0.585, h:0.545, r:0.045 }; // tela na cena 3 (= SCREEN da cena 1, mesma TV)
 const REW_A=1.35;                                    // aceleração exponencial do rebobinar
 const REW_BLUR=14, S3_POP=0.6, S3_FLASH=0.15;        // borrão máx (px), pop da TV, flash do corte
-const REF_START=1.6, REF_DUR=1.7, REF_BLIP=0.25;     // slideshow na tela: começa, cada ref fica, blip de estática entre (acelerado a pedido)
+const REF_START=1.1, REF_DUR=1.15, REF_BLIP=0.15;    // slideshow na tela: começa, cada ref fica, blip de estática entre (acelerado a pedido)
 const REF_PAINT=0.7, REF_FIT=0.86, REF_FEATHER=0.10; // tinta ao entrar, tamanho na tela (contain), largura do degradê das bordas
 // ---- cena 3b: depois das refs, a ESTÁTICA SAI e as falas são ESCRITAS NA TELA ----
 const REF_END=REF_START+TVREF_N*(REF_DUR+REF_BLIP);  // fim do slideshow (1 volta completa das 8)
@@ -226,20 +226,20 @@ const QUOTES3=[
   "com imaginar realidades nossas,\nque talvez um dia pudessem sair\nda nossa cabeça e virar mundo.",
   "porque aprender\ntambém é imaginar."
 ];
-const Q3SEQ=(()=>{ const a=[]; let t=REF_END+1.0;    // agenda auto-derivada (como a QSEQ)
+const Q3SEQ=(()=>{ const a=[]; let t=REF_END+0.7;    // agenda auto-derivada (como a QSEQ)
   for(const q of QUOTES3){ const n=q.replace(/\n/g,'').length;
-    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.8, fadeDur:0.9 });
-    t=end+1.8+0.9+0.4; }
+    const wDur=Math.max(1.6,n*0.04), start=t+0.45, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.1, fadeDur:0.65 });
+    t=end+1.1+0.65+0.2; }
   return a; })();
 const Q3_END=Q3SEQ[Q3SEQ.length-1].fade+Q3SEQ[Q3SEQ.length-1].fadeDur;
 // ---- cena 4 (início): o LIVRO volta na tela (fade in + transformação inteira + folheia)
 // e vira um SMARTPHONE — asset especulativo livro_vira_celular.png (ver cena4-prompts.md)
-const T3={ bookAt:Q3_END+1.0, celAt:Q3_END+8.0,      // livro volta; livro->celular
-           zoomAt:Q3_END+8.8, zoomDur:3.0,           // cena 4: a TV é EMPURRADA pra fora (suave)
-           reelsAt:Q3_END+12.0, spamAt:Q3_END+16.0,  // 4b: reels (2 voltas de 2s) -> spam vibrando
-           walkAt:Q3_END+18.5,                       // 4c: a menina entra andando (dir->esq)
-           shrinkAt:Q3_END+19.0, shrinkDur:2.6 };    //     enquanto o celular ENCOLHE suave
+const T3={ bookAt:Q3_END+0.5, celAt:Q3_END+3.8,      // livro volta; livro->celular (janela do folhear apertada — pedido)
+           zoomAt:Q3_END+4.6, zoomDur:2.6,           // cena 4: a TV é EMPURRADA pra fora (suave)
+           reelsAt:Q3_END+7.4, spamAt:Q3_END+11.4,   // 4b: reels (2 voltas de 2s) -> spam vibrando
+           walkAt:Q3_END+13.4,                       // 4c: a menina entra andando (dir->esq)
+           shrinkAt:Q3_END+13.9, shrinkDur:2.2 };    //     enquanto o celular ENCOLHE suave
 const Z4_MAX=2.6;   // quanto a TV cresce até sumir dos arredores — o celular NÃO cresce junto
 const BOOK3_W=0.42, BOOK3_Y=0.80;                    // livro na tela: largura (fração da tela), y da base
 const cel=new Image(); cel.onload=()=>cel._ok=true; cel.onerror=()=>{}; cel.src='livro_vira_celular.png';
@@ -285,17 +285,17 @@ const QUOTES4=[
   "de fazer perguntas.\nde criar.\nde imaginar outros futuros.",
   "e quando esquecemos de aprender,\na nossa história é interrompida."
 ];
-const Q4SEQ=(()=>{ const a=[]; let t=T3.reelsAt+0.5; // agenda auto-derivada (como a Q3SEQ)
+const Q4SEQ=(()=>{ const a=[]; let t=T3.reelsAt+0.4; // agenda auto-derivada (como a Q3SEQ)
   for(const q of QUOTES4){ const n=q.replace(/\n/g,'').length;
-    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.8, fadeDur:0.9 });
-    t=end+1.8+0.9+0.4; }
+    const wDur=Math.max(1.6,n*0.04), start=t+0.45, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.1, fadeDur:0.65 });
+    t=end+1.1+0.65+0.2; }
   return a; })();
 const Q4_LEAD="por isso, existe", TITLE="O capítulo que falta";
-const T4={ leadAt:Q4SEQ[4].fade+Q4SEQ[4].fadeDur+0.4 };
-T4.leadStart=T4.leadAt+0.6; T4.leadDur=1.6;
-T4.titleAt=T4.leadStart+T4.leadDur+0.5;              // a mão escreve o título (devagar, dramático)
-T4.titleStart=T4.titleAt+0.5; T4.titleDur=1.9;
+const T4={ leadAt:Q4SEQ[4].fade+Q4SEQ[4].fadeDur+0.3 };
+T4.leadStart=T4.leadAt+0.45; T4.leadDur=1.4;
+T4.titleAt=T4.leadStart+T4.leadDur+0.4;              // a mão escreve o título (devagar, dramático)
+T4.titleStart=T4.titleAt+0.45; T4.titleDur=1.9;
 const Q4_PX=0.042, Q4_CX=0.25, Q4_Y=0.28;            // narração: fonte/coluna esquerda (frações do palco)
 const TITLE_PX=0.075, TITLE_CX=0.30, TITLE_Y=0.40, LEAD_Y=0.30; // destaque final (quadrante livre)
 // ---- cena 5a: a lampadinha de ideia acende sobre a cabeça dela -> treme -> RACHA -> apaga
@@ -343,8 +343,8 @@ const CRACK_DK=[0.06,0.11,0.17,0.24,0.30];               // escurecimento por de
 // sobrando a tirinha serrilhada; por trás, uma página NOVA mais clara. o TÍTULO NÃO sai
 // com ela: fica vivo por cima (a única coisa que sobrevive).
 const BG5='#f9f5ec';                                     // a página nova (mais clara)
-const T5b={ crack2At:T4.titleStart+T4.titleDur+0.6 };    // título escrito -> teia cresce
-T5b.tearAt=T5b.crack2At+1.6; T5b.tearDraw=0.9; T5b.tearDur=1.6;  // rasgo desenha -> arranca
+const T5b={ crack2At:T4.titleStart+T4.titleDur+0.5 };    // título escrito -> teia cresce
+T5b.tearAt=T5b.crack2At+1.1; T5b.tearDraw=0.8; T5b.tearDur=1.4;  // rasgo desenha -> arranca
 T5b.gone=T5b.tearAt+T5b.tearDraw+T5b.tearDur;
 const TEAR=(()=>{ const p=[], n=26;                      // o rasgo (irregular, quase vertical)
   for(let i=0;i<=n;i++){ const t=i/n;
@@ -357,25 +357,25 @@ const CAMP=[
   "uma campanha que lembra que estudar permite\nque muitas histórias continuem a voar alto.",
   "que o saber não é só uma obrigação da escola,\nmas uma forma de abrir possibilidades para a vida."
 ];
-const CSEQ=(()=>{ const a=[]; let t=T5b.gone+0.6;
+const CSEQ=(()=>{ const a=[]; let t=T5b.gone+0.4;
   for(const q of CAMP){ const n=q.replace(/\n/g,'').length;
-    const wDur=Math.max(2.0,n*0.05), start=t+0.6, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+2.2, fadeDur:0.9 });
-    t=end+2.2+0.9+0.4; }
+    const wDur=Math.max(1.6,n*0.04), start=t+0.45, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.4, fadeDur:0.7 });
+    t=end+1.4+0.7+0.2; }
   return a; })();
 const CAMP_PX=0.042, CAMP_Y=0.62;                        // campanha: centrada, abaixo do título
 const TAG="Histórias começam com o saber.", TAG_PX=0.062, TAG_Y=0.53, TAG_CX=0.353; // o fecho, destacado (fica; esquerda alinhada com a do título)
-const T5tag={ at:CSEQ[1].fade+CSEQ[1].fadeDur+0.5 };
-T5tag.start=T5tag.at+0.6; T5tag.dur=2.1;
+const T5tag={ at:CSEQ[1].fade+CSEQ[1].fadeDur+0.4 };
+T5tag.start=T5tag.at+0.5; T5tag.dur=1.9;
 // ---- cena 6 (transição): o fecho respira, aí a tirinha rasgada se ESVAI e o
 // título+fecho saem em fade — o palco fica limpo pra caça à frase (5 estações)
-const T6={ at:T5tag.start+T5tag.dur+3.0, fadeDur:1.2 };
+const T6={ at:T5tag.start+T5tag.dur+1.8, fadeDur:1.0 };
 // ---- cena 6: a caça à frase — 5 estações deslizando pra direita (plano no
 // cena6-prompts.md). letreiros manuscritos por código (logos = caligrafia);
 // personagens = grids eco_* (especulativos); a pista de cada estação é um
 // pedacinho AMARELO (callback da lâmpada) que voa pro rodapé e ACUMULA; no fim
 // os pedaços montam "Histórias começam com o saber."
-const S6={ at:T6.at+T6.fadeDur+0.8, dwell:7.5, slide:1.3 };
+const S6={ at:T6.at+T6.fadeDur+0.5, dwell:5.4, slide:1.0 };
 S6.per=S6.dwell+S6.slide;
 const S6_NAMES=["@globo / GloboPop","g1","globoplay","Viu","Movimento LED"];
 const S6_WORDS=["Histórias","começam","com o",null,"saber."];
@@ -392,34 +392,34 @@ const AMAR='#e2aa4e', AMAR_TXT='#4a3416';
 // estação 1 (@globo/GloboPop): moldura de celular com "vídeo" abstrato + a dupla
 // (eco_pista) acha a pista no chão; a pista voa pro rodapé e vira "Histórias"
 const ST1={ celX:0.30, celY:0.46, celH:0.55, dupX:0.66, dupFY:0.82, dupH:0.44,
-            sprAt:0.6, fps:6, scrapAt:4.6, flyDur:1.1, scrapFrom:[0.695,0.375] };
+            sprAt:0.4, fps:6, scrapAt:3.6, flyDur:1.0, scrapFrom:[0.695,0.375] };
 // estação 2 (g1): página de portal por código (manchete manuscrita + colunas de
 // risquinhos + foto hachurada) + leitor eco_jornal (lê em boil f0–2, aí a pista
 // cai do jornal f3–7 a 5fps, boil final f8–11); pista → "começam"
 const ecoJornal=ecoLoad('eco_jornal.png'); const JORNAL_N=12;
 const ST2={ pgX:0.29, pgY:0.46, pgH:0.60, ldrX:0.68, ldrFY:0.82, ldrH:0.46,
-            sprAt:0.6, read:1.6, fps:5, scrapAt:5.0, scrapFrom:[0.715,0.40],
+            sprAt:0.4, read:1.2, fps:5, scrapAt:3.9, scrapFrom:[0.715,0.40],
             man:"a educação de milhões de jovens\nfoi interrompida no meio" };
 // estação 3 (globoplay): telona com "novela" que PAUSA (o conteúdo congela — só a
 // moldura segue fervendo), ícone ⏸ pop, casal eco_sofa reage, e o MINI ANÚNCIO
 // sobe por baixo com o pedacinho "com o" (que voa pro rodapé já escrito)
 const ecoSofa=ecoLoad('eco_sofa.png'); const SOFA_N=12;
 const ST3={ tvX:0.33, tvY:0.34, tvW:0.46, sofX:0.345, sofFY:0.86, sofH:0.30,
-            pauseAt:2.2, fps:5, bannerAt:3.5, scrapAt:5.5, scrapFrom:[0.292,0.552] };
+            pauseAt:1.8, fps:5, bannerAt:2.8, scrapAt:4.2, scrapFrom:[0.292,0.552] };
 // estação 4 (Viu): 2 molduras verticais de vídeo curto, um influenciador em cada
 // (eco_influencer2 = perfil→frontal na A; eco_influencer = frontal na B, defasado);
 // uma BOLHA rabiscada envolve a moldura A e ESTOURA quando ele abre os braços
 // ("Fora da bolha" manuscrito embaixo). Sem pedacinho — o Viu convida a BUSCAR.
 const ecoInf1=ecoLoad('eco_influencer.png'), ecoInf2=ecoLoad('eco_influencer2.png');
 const INF_N=12;
-const ST4={ aX:0.29, bX:0.545, mY:0.44, mH:0.56, sprAt:0.6, bStag:0.5,
-            popAt:2.9, lblY:0.795 };
+const ST4={ aX:0.29, bX:0.545, mY:0.44, mH:0.56, sprAt:0.4, bStag:0.5,
+            popAt:2.7, lblY:0.795 };
 // estação 5 (Movimento LED): a carta/relato por código (linhas manuscritas
 // ilegíveis) — UMA palavra se acende em amarelo no meio do texto ("saber.",
 // sincronizada com a leitora eco_leitura descobrindo a dela) e voa pro rodapé
 const ecoLeitura=ecoLoad('eco_leitura.png'); const LEIT_N=12;
 const ST5={ pgX:0.30, pgY:0.44, pgH:0.58, ldrX:0.67, ldrFY:0.83, ldrH:0.42,
-            sprAt:0.6, read:1.6, fps:5, glowAt:3.0, scrapAt:5.4,
+            sprAt:0.4, read:1.2, fps:5, glowAt:2.6, scrapAt:4.2,
             scrapFrom:[0.345,0.475] };
 const S6SCRAP=[ {at:ST1.scrapAt, from:ST1.scrapFrom},
                 {at:ST2.scrapAt, from:ST2.scrapFrom},
@@ -519,89 +519,47 @@ const BOIL_FPS=8, PMAX=1.15;
 function boil(now, ampPx, ampRot){        // tremor de linha do close-up (8fps)
   const s=Math.floor((now/1000)*BOIL_FPS);
   return { dx:(hash(s*13+1,7)-0.5)*2*ampPx, dy:(hash(s*7+5,3)-0.5)*2*ampPx, rot:(hash(s*17+2,11)-0.5)*2*ampRot }; }
-const T={ fade:0.35, revealStart:0.25, reveal:2.0, onAt:2.35, zoomStart:2.95, zoomDur:3.2,
-          sceneAt:6.9, sceneFade:0.7, girlReveal:1.1,
-          hStart:8.4, hDur:0.8, wStart:9.1, wDur:2.6,              // mão escreve dentro da tela
-          hLift:11.7, hLiftDur:0.5, wFade:13.7, wFadeDur:1.0,      // mão sai; texto some 2s após escrever
-          // cena 2
-          pushAt:15.0, pushDur:2.8,                                // câmera empurra a moldura pra fora
-          standAt:15.4, standDur:1.4,                              // menina levanta (frames 1..11)
-          bookAt:15.4, bookDur:2.4,                                // folha vira livro
-          riffleAt:18.6,                                           // livro começa a folhear
+const T={ fade:0.35, revealStart:0.25, reveal:1.7, onAt:2.05, zoomStart:2.6, zoomDur:2.8,
+          sceneAt:5.9, sceneFade:0.7, girlReveal:1.0,
+          hStart:7.2, hDur:0.7, wStart:7.9, wDur:2.1,              // mão escreve dentro da tela
+          hLift:10.2, hLiftDur:0.5, wFade:11.4, wFadeDur:0.9,      // mão sai; texto some 1.4s após escrever
+          // cena 2 (pacing 2026-07-03: timeline apertada UNIFORME — nada acelerado,
+          // só menos tempo morto; offsets internos preservados: riffle=bookAt+3.2,
+          // pages=riffle+2.4, zout/fut/walk/qHand = pages+0.2/+3.0/+3.5/+5.5)
+          pushAt:12.6, pushDur:2.5,                                // câmera empurra a moldura pra fora
+          standAt:13.0, standDur:1.4,                              // menina levanta (frames 1..11)
+          bookAt:13.0, bookDur:2.4,                                // folha vira livro
+          riffleAt:16.2,                                           // livro começa a folhear
           // cena 2b
-          pagesAt:21.0,                                            // folhas começam a sair do livro
-          zoutAt:21.2, zoutDur:6.0,                                // câmera afasta devagar (menina menor)
-          walkAt:24.5,                                             // menina anda -> carrossel desliza
+          pagesAt:18.6,                                            // folhas começam a sair do livro
+          zoutAt:18.8, zoutDur:5.0,                                // câmera afasta devagar (menina menor)
+          walkAt:22.1,                                             // menina anda -> carrossel desliza
           // cena 2c
-          futAt:24.0,                                              // a partir daqui os futuros podem pintar
-          qHand:26.5 };                                            // início da sequência da narração (QSEQ)
+          futAt:21.6,                                              // a partir daqui os futuros podem pintar
+          qHand:24.1 };                                            // início da sequência da narração (QSEQ)
 // agenda da narração: tempos derivados do tamanho de cada frase (escrita ~0.07s/letra,
 // segura 2.6s, fade 1.2s, respiro 0.5s antes da próxima; a última segura mais 4s)
 const QSEQ=(()=>{ const a=[]; let t=T.qHand;
   for(const q of QUOTES){ const n=q.replace(/\n/g,'').length;
-    const wDur=Math.max(2.4,n*0.07), start=t+0.7, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+2.6, fadeDur:1.2 });
-    t=end+2.6+1.2+0.5; }
-  a[a.length-1].fade+=4;                        // a última respira mais antes de sair
+    const wDur=Math.max(2.0,n*0.055), start=t+0.5, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.4, fadeDur:0.9 });
+    t=end+1.4+0.9+0.2; }
+  a[a.length-1].fade+=2.5;                      // a última respira mais antes de sair
   return a; })();
 // cena 3: o rebobinar começa quando a última frase terminou de sumir; a velocidade parte de
 // 1x (reverso) e cresce exponencialmente até o tempo virtual chegar a 0 -> corte pra cena 3
 T.rewAt=QSEQ[QSEQ.length-1].fade+QSEQ[QSEQ.length-1].fadeDur+0.8;
 const REW_END=T.rewAt+Math.log(1+REW_A*T.rewAt)/REW_A;   // instante real em que o rewind zera
 let t0=performance.now();
-const DUR=REW_END+S6F.at+8;                              // fim nominal (tempo DA TIMELINE): a frase montada + respiro
-/* ---------- pacing: time-warp por trechos (2026-07-03, pedido do Iagho) ----------
-   acelera a COREOGRAFIA sem tocar em nenhum efeito: o relógio real é convertido
-   pro relógio da timeline por segmentos [a,b) em tempo VIRTUAL com velocidade v.
-   o boil de linha usa performance.now() direto, então segue a 8fps de verdade
-   mesmo nos trechos acelerados (por isso NÃO acelerar na edição de vídeo).
-   V_WRITE = velocidade enquanto a mão escreve (limite = legibilidade);
-   V_HOLD  = velocidade dos respiros (segura/fade/vão) — o público já leu. */
-const V_WRITE=1.45, V_HOLD=2.6;
-const SPEED=(()=>{ const s=[];
-  const seq=(arr,base,gap)=>{ for(const q of arr){
-    s.push([base+q.hand,       base+q.start+q.wDur,         V_WRITE]);
-    s.push([base+q.start+q.wDur, base+q.fade+q.fadeDur+gap, V_HOLD]); } };
-  s.push([0,                T.hStart,           1.4 ]); // abertura: TV desenha/liga/zoom
-  s.push([T.hStart,         T.wStart+T.wDur,    1.3 ]); // "era uma vez…" (pedido: 1.3x)
-  s.push([T.wStart+T.wDur,  T.pushAt,           2.0 ]); // mão sai, texto some
-  s.push([T.pushAt,         T.qHand,            1.6 ]); // levanta/livro/folhas -> carrossel
-  seq(QSEQ, 0, 0.5);                                    // narração do carrossel
-  s.push([T.rewAt,          REW_END,            1.25]); // rebobinar (já é rápido)
-  s.push([REW_END,              REW_END+REF_START, 1.4]); // TV assenta
-  s.push([REW_END+REF_START,    REW_END+REF_END,   1.9]); // os desenhos/refs na TV
-  seq(Q3SEQ, REW_END, 0.4);                             // falas na tela da TV
-  s.push([REW_END+T3.bookAt,    REW_END+T3.celAt,  2.2]); // livro folheia de novo (pedido: diminui)
-  s.push([REW_END+T3.celAt,     REW_END+Q4SEQ[0].hand, 1.5]); // vira celular/zoom/reels
-  seq(Q4SEQ, REW_END, 0.4);                             // narração do celular (lâmpada em sincronia)
-  s.push([REW_END+T4.leadAt,    REW_END+T5b.crack2At, 1.3 ]); // "por isso, existe"+título (dramático)
-  s.push([REW_END+T5b.crack2At, REW_END+CSEQ[0].hand, 1.8 ]); // teia cresce/rasgo/página arrancada
-  seq(CSEQ, REW_END, 0.4);                              // campanha
-  s.push([REW_END+T5tag.at,     REW_END+T5tag.start+T5tag.dur, 1.25]); // fecho escrito (dramático)
-  s.push([REW_END+T5tag.start+T5tag.dur, REW_END+S6.at, 1.8]); // respiro + transição 5->6
-  s.push([REW_END+S6.at,        REW_END+S6F.at,    2.0]); // as 5 estações da caça
-  s.push([REW_END+S6F.at,       DUR,               1.4]); // a frase montada (final)
-  return s; })();
-const WARP=(()=>{ const segs=[]; let cur=0;              // vãos não listados = 1x
-  for(const [a,b,v] of SPEED.slice().sort((p,q)=>p[0]-q[0])){
-    const a2=Math.max(a,cur); if(a2>=b) continue;
-    if(a2>cur) segs.push({a:cur,b:a2,v:1});
-    segs.push({a:a2,b,v}); cur=b; }
-  segs.push({a:cur,b:1e9,v:1});
-  let r=0; for(const g of segs){ g.r=r; r+=(g.b-g.a)/g.v; }
-  const v2r=t=>{ for(const g of segs) if(t<=g.b) return g.r+(t-g.a)/g.v; return t; };
-  const r2v=t=>{ for(const g of segs){ const re=g.r+(g.b-g.a)/g.v;
-    if(t<=re) return g.a+(t-g.r)*g.v; } return t; };
-  return {v2r,r2v}; })();
-const REDUR=WARP.v2r(DUR);                               // duração REAL da peça (o que o público vê)
 /* ---------- player de scrub (ajustes; barra some quando o mouse sai) ---------- */
+const DUR=REW_END+S6F.at+7;                              // fim nominal: a frase montada + respiro
 const bar=document.getElementById('bar'), tm=document.getElementById('tm'), pp=document.getElementById('pp');
-bar.max=Math.ceil(REDUR*10);
+bar.max=Math.ceil(DUR*10);
 let paused=false, pausedEl=0;
 const fmtT=s=>{ s=Math.max(0,s); return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); };
-function curEl(){ return paused?pausedEl:(performance.now()-t0)/1000; }  // tempo REAL
-function seekTo(s){ s=Math.max(0,Math.min(REDUR,s));     // seek em tempo REAL: o estado é todo função
-  pausedEl=s; t0=performance.now()-s*1000;               // do el (virtual); só o gatilho dos futuros zera
+function curEl(){ return paused?pausedEl:(performance.now()-t0)/1000; }
+function seekTo(s){ s=Math.max(0,Math.min(DUR,s));       // seek: o estado é todo função de el,
+  pausedEl=s; t0=performance.now()-s*1000;               // só o gatilho dos futuros precisa zerar
   futStart=[]; cv.style.filter=''; }
 function togglePause(){ if(paused){ t0=performance.now()-pausedEl*1000; }
   else pausedEl=(performance.now()-t0)/1000;
@@ -609,11 +567,10 @@ function togglePause(){ if(paused){ t0=performance.now()-pausedEl*1000; }
 bar.addEventListener('input',()=>seekTo(bar.value/10));
 bar.addEventListener('change',()=>bar.blur());           // solta o foco pra barra voltar a acompanhar
 pp.addEventListener('click',togglePause);
-window.__el=()=>curEl();                                 // cronômetro REAL p/ capturas
-window.__v=()=>WARP.r2v(curEl());                        // tempo VIRTUAL (da timeline) atual
-window.__redur=REDUR;                                    // duração real da peça (pacing)
-window.__seek=s=>seekTo(WARP.v2r(s));                    // pula pra um tempo DA TIMELINE (testes)
-window.__s3=e=>seekTo(WARP.v2r(REW_END+e));              // pula pra um tempo DA CENA 3 (testes)
+window.__el=()=>curEl();                                 // cronômetro p/ capturas
+window.__dur=DUR;                                        // duração da peça (pacing)
+window.__seek=s=>seekTo(s);                              // pula pra um tempo (testes)
+window.__s3=e=>seekTo(REW_END+e);                        // pula pra um tempo DA CENA 3 (testes)
 function replay(){ seekTo(0); if(paused) togglePause(); }
 const cl01=t=>t<0?0:t>1?1:t;
 function easeIO(t){ return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
@@ -1452,10 +1409,9 @@ function draw(now){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
   if(tvN<3) return;
-  const elReal=paused?pausedEl:(now-t0)/1000;
-  const elR=WARP.r2v(elReal);                            // daqui pra baixo tudo é tempo da TIMELINE
-  if(document.activeElement!==bar){ bar.value=Math.min(REDUR,elReal)*10;
-    tm.textContent=fmtT(elReal)+' / '+fmtT(REDUR); }     // o player mostra o tempo REAL (o do público)
+  const elR=paused?pausedEl:(now-t0)/1000;
+  if(document.activeElement!==bar){ bar.value=Math.min(DUR,elR)*10;
+    tm.textContent=fmtT(elR)+' / '+fmtT(DUR); }
   // cena 3 já começou?
   if(elR>=REW_END){
     const e3=elR-REW_END, b3=REW_BLUR*(1-cl01(e3/0.9));           // borrão termina de limpar na TV
