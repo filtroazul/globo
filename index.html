@@ -216,14 +216,13 @@ const REF_PAINT=0.7, REF_FIT=0.86, REF_FEATHER=0.10; // tinta ao entrar, tamanho
 const REF_END=REF_START+TVREF_N*(REF_DUR+REF_BLIP);  // fim do slideshow (1 volta completa das 8)
 const Q3_PX=0.085;                                   // fonte das falas (fração da ALTURA DA TELA)
 const QUOTES3=[
-  "quando a tv ficou mais comum\nnas casas do brasil, ela também virou\numa oportunidade de sala de aula.",
-  "em uma época em que o país\nainda enfrentava altos índices\nde analfabetismo e evasão escolar,\na televisão surgiu como uma\ntecnologia carregada de promessas.",
-  "uma delas era\ndemocratizar o conhecimento.",
-  "a tecnologia mais atual daquele tempo\nfoi usada para levar educação\na mais pessoas.",
-  "para entrar nas casas.\npara ensinar de um jeito\nmais acessível.",
-  "para mostrar que aprender\ntambém podia acontecer pela tela,\npela história, pela fantasia.",
+  // enxugado 2026-07-03 (pacing; ideias preservadas — texto integral no roteiro.md)
+  "quando a tv chegou às casas do brasil,\nela também virou sala de aula.",
+  "num país de analfabetismo e evasão escolar,\nela veio carregada de promessas.",
+  "uma delas: democratizar o conhecimento.",
+  "a tecnologia mais atual daquele tempo\nensinando de um jeito acessível —\npela tela, pela história, pela fantasia.",
   "e por aí o nosso saber\ncomeçou com sonhar alto.",
-  "com imaginar realidades nossas,\nque talvez um dia pudessem sair\nda nossa cabeça e virar mundo.",
+  "com imaginar realidades\nque um dia virariam mundo.",
   "porque aprender\ntambém é imaginar."
 ];
 const Q3SEQ=(()=>{ const a=[]; let t=REF_END+0.7;    // agenda auto-derivada (como a QSEQ)
@@ -279,9 +278,10 @@ T3g.grabAt=T3g.arrive+0.8;                           // ela olha o celular um in
 // "O capítulo que falta" em DESTAQUE (os dois FICAM; o título com as letras fervendo a
 // 8fps uma a uma — handWrite perLetter)
 const QUOTES4=[
-  "hoje, temos uma nova tecnologia nas mãos.\ne é curioso perceber como estamos\nenfrentando um problema parecido\ncom o daquela época.",
-  "mas, infelizmente, boa parte\ndo nosso tempo no celular acaba\nsendo ocupado por conteúdos rápidos,\nsuperficiais, que prendem a atenção,\nmas nem sempre despertam a criatividade.",
-  "aos poucos, a gente vai perdendo\na vontade de buscar novos mundos.",
+  // enxugado 2026-07-03 (pacing; frases 4 e 5 INTACTAS — sincronizam a lâmpada/racha)
+  "hoje, temos uma nova tecnologia nas mãos.\ne um problema parecido com o daquela época.",
+  "mas boa parte do nosso tempo no celular\nvai pra conteúdos rápidos, que prendem\na atenção mas não despertam a criatividade.",
+  "aos poucos, a gente perde a vontade\nde buscar novos mundos.",
   "de fazer perguntas.\nde criar.\nde imaginar outros futuros.",
   "e quando esquecemos de aprender,\na nossa história é interrompida."
 ];
@@ -354,8 +354,9 @@ const TEAR=(()=>{ const p=[], n=26;                      // o rasgo (irregular, 
   return p; })();
 // cena 5d: a campanha escrita à mão na página nova
 const CAMP=[
-  "uma campanha que lembra que estudar permite\nque muitas histórias continuem a voar alto.",
-  "que o saber não é só uma obrigação da escola,\nmas uma forma de abrir possibilidades para a vida."
+  // enxugado 2026-07-03 (pacing; ideias preservadas)
+  "uma campanha que lembra:\nestudar faz histórias voarem alto.",
+  "que o saber não é obrigação da escola:\né abrir possibilidades pra vida."
 ];
 const CSEQ=(()=>{ const a=[]; let t=T5b.gone+0.4;
   for(const q of CAMP){ const n=q.replace(/\n/g,'').length;
@@ -435,11 +436,11 @@ const TEXT="Era uma vez…", FONT="'Caveat', cursive";
 // cena 2c: narração (minúscula, estilo Marcela), escrita fixa na câmera — uma frase por vez,
 // a mão escreve, a frase fica, some em fade e a próxima entra no mesmo lugar (\n = quebra de linha)
 const QUOTES=[
+  // enxugado 2026-07-03 (pacing; ideias preservadas — texto integral no roteiro.md)
   "toda história começa com uma possibilidade.",
   "histórias começam com mudanças.",
-  "quando a gente aprende, não estamos\napenas aprendendo a somar um mais um,\ndecorar uma fórmula ou descobrir de\nqual planta podemos colher frutos.",
-  "a gente aprende a sonhar. a imaginar.\na mudar a nossa realidade\ndo nosso jeitinho.",
-  "porque aprender também é descobrir\nque existem outros caminhos.\ne a educação abre esses caminhos."
+  "quando a gente aprende, não está só somando\num mais um: aprende a sonhar, a imaginar,\na mudar a realidade do nosso jeitinho.",
+  "porque aprender é descobrir outros caminhos.\ne a educação abre esses caminhos."
 ];
 const QUOTE_PX=0.050, QUOTE_X=0.55, QUOTE_Y=0.745;   // knobs: fonte/posição (frações do palco) — à DIREITA da menina (a possibilidade à frente); 1ª linha ancorada em QUOTE_Y, bloco cresce pra baixo
 const handImg=new Image(); let handOK=false, handAR=0.7;

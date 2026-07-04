@@ -32,9 +32,13 @@
 >    3.3s — pedido; reels Q3_END+7.4), título/tear/tag levemente, respiro T6 1.8,
 >    cena 6 dwell 5.4/slide 1.0 (STs internos re-sincronizados: scrapAts 3.6–4.2,
 >    pauseAt 1.8, popAt 2.7, glowAt 2.6), DUR fecho +7. `window.__dur` exposto.
->    **⚠️ 3:00 em ponto NÃO FECHA a 1x uniforme sem mexer no texto**: são 21 frases
->    (~1560 letras) = ~2:10 só de agendas de escrita legível. Opções em aberto com o
->    casal: enxugar frases (Marcela) ou aceitar ~3:54. Re-tunar quando 7–8 entrarem.
+>    **TEXTO ENXUGADO (2026-07-03, na sequência): peça em ~3:22.** As 21 frases viram
+>    18 (~880 letras): QUOTES 5→4 (frases 3+4 fundidas), QUOTES3 9→7, QUOTES4
+>    encurtadas (frases 4 e 5 INTACTAS — sincronizam lâmpada/racha via Q4SEQ[3]/[4]),
+>    CAMP compactada. Ideias todas preservadas; **texto integral da Marcela segue no
+>    `roteiro.md`** (não mexer lá). ⚠️ A MARCELA precisa REVISAR a redação enxuta
+>    (é trabalho dela). Pra chegar a 3:00 em ponto: ela enxugar mais um pouco, ou
+>    aceitar 3:22, ou apertar escrita no limite (~3:12). Re-tunar quando 7–8 entrarem.
 > **Jeito de trabalhar**: "de pouco em pouco" — um passo por vez no chat, prompt
 > de GPT pronto pra colar quando precisar de asset (frame a frame, anexar
 > `ultimo_frame.png`), fatiar/re-registrar/verificar com screenshot ANTES de
