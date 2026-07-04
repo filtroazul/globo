@@ -36,9 +36,15 @@
 >    18 (~880 letras): QUOTES 5→4 (frases 3+4 fundidas), QUOTES3 9→7, QUOTES4
 >    encurtadas (frases 4 e 5 INTACTAS — sincronizam lâmpada/racha via Q4SEQ[3]/[4]),
 >    CAMP compactada. Ideias todas preservadas; **texto integral da Marcela segue no
->    `roteiro.md`** (não mexer lá). ⚠️ A MARCELA precisa REVISAR a redação enxuta
->    (é trabalho dela). Pra chegar a 3:00 em ponto: ela enxugar mais um pouco, ou
->    aceitar 3:22, ou apertar escrita no limite (~3:12). Re-tunar quando 7–8 entrarem.
+>    `roteiro.md`** (não mexer lá). ⚠️ A MARCELA precisa REVISAR a redação enxuta.
+>    **DEPOIS (mesma sessão): 3:22 → ~3:01 em rodadas aprovadas pelo Iagho**, sempre
+>    1x uniforme: cena 6 dwell 4.3 (STs internos adiantados: scraps 3.0–3.4, pause 1.5,
+>    pop 2.4, glow 2.2); Q3SEQ fade-out rápido (hold 0.7/fade 0.4); dramático pós-rasgo
+>    encurtado (crack2 +0.3, tear +0.6, CSEQ gone+0.2); e o pacote final de −11s:
+>    abertura sceneAt 4.9, "era uma vez" wDur 1.5, QSEQ 0.05/hold 1.1/última +1.5,
+>    REF_DUR 1.0, Q4SEQ hold 0.9/fade 0.6, reelsAt Q3_END+6.8, T6 +1.4, DUR fecho +6.
+>    **PEÇA EM ~3:00,9 (`window.__dur`≈180.9). META BATIDA.** Re-tunar quando 7–8
+>    entrarem (vão ADICIONAR tempo — combinar com o casal onde compensar).
 > **Jeito de trabalhar**: "de pouco em pouco" — um passo por vez no chat, prompt
 > de GPT pronto pra colar quando precisar de asset (frame a frame, anexar
 > `ultimo_frame.png`), fatiar/re-registrar/verificar com screenshot ANTES de

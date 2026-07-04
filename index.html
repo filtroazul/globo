@@ -210,7 +210,7 @@ function composeRef(im,p){
 const SCREEN3={ x:0.135, y:0.275, w:0.585, h:0.545, r:0.045 }; // tela na cena 3 (= SCREEN da cena 1, mesma TV)
 const REW_A=1.35;                                    // aceleração exponencial do rebobinar
 const REW_BLUR=14, S3_POP=0.6, S3_FLASH=0.15;        // borrão máx (px), pop da TV, flash do corte
-const REF_START=1.1, REF_DUR=1.15, REF_BLIP=0.15;    // slideshow na tela: começa, cada ref fica, blip de estática entre (acelerado a pedido)
+const REF_START=1.1, REF_DUR=1.0, REF_BLIP=0.15;     // slideshow na tela: começa, cada ref fica, blip de estática entre (acelerado a pedido)
 const REF_PAINT=0.7, REF_FIT=0.86, REF_FEATHER=0.10; // tinta ao entrar, tamanho na tela (contain), largura do degradê das bordas
 // ---- cena 3b: depois das refs, a ESTÁTICA SAI e as falas são ESCRITAS NA TELA ----
 const REF_END=REF_START+TVREF_N*(REF_DUR+REF_BLIP);  // fim do slideshow (1 volta completa das 8)
@@ -235,10 +235,10 @@ const Q3_END=Q3SEQ[Q3SEQ.length-1].fade+Q3SEQ[Q3SEQ.length-1].fadeDur;
 // ---- cena 4 (início): o LIVRO volta na tela (fade in + transformação inteira + folheia)
 // e vira um SMARTPHONE — asset especulativo livro_vira_celular.png (ver cena4-prompts.md)
 const T3={ bookAt:Q3_END+0.5, celAt:Q3_END+3.8,      // livro volta; livro->celular (janela do folhear apertada — pedido)
-           zoomAt:Q3_END+4.6, zoomDur:2.6,           // cena 4: a TV é EMPURRADA pra fora (suave)
-           reelsAt:Q3_END+7.4, spamAt:Q3_END+11.4,   // 4b: reels (2 voltas de 2s) -> spam vibrando
-           walkAt:Q3_END+13.4,                       // 4c: a menina entra andando (dir->esq)
-           shrinkAt:Q3_END+13.9, shrinkDur:2.2 };    //     enquanto o celular ENCOLHE suave
+           zoomAt:Q3_END+4.2, zoomDur:2.4,           // cena 4: a TV é EMPURRADA pra fora (suave, começa antes)
+           reelsAt:Q3_END+6.8, spamAt:Q3_END+10.8,   // 4b: reels (2 voltas de 2s) -> spam vibrando
+           walkAt:Q3_END+12.8,                       // 4c: a menina entra andando (dir->esq)
+           shrinkAt:Q3_END+13.3, shrinkDur:2.2 };    //     enquanto o celular ENCOLHE suave
 const Z4_MAX=2.6;   // quanto a TV cresce até sumir dos arredores — o celular NÃO cresce junto
 const BOOK3_W=0.42, BOOK3_Y=0.80;                    // livro na tela: largura (fração da tela), y da base
 const cel=new Image(); cel.onload=()=>cel._ok=true; cel.onerror=()=>{}; cel.src='livro_vira_celular.png';
@@ -288,8 +288,8 @@ const QUOTES4=[
 const Q4SEQ=(()=>{ const a=[]; let t=T3.reelsAt+0.4; // agenda auto-derivada (como a Q3SEQ)
   for(const q of QUOTES4){ const n=q.replace(/\n/g,'').length;
     const wDur=Math.max(1.6,n*0.04), start=t+0.45, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.1, fadeDur:0.65 });
-    t=end+1.1+0.65+0.2; }
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+0.9, fadeDur:0.6 });
+    t=end+0.9+0.6+0.15; }
   return a; })();
 const Q4_LEAD="por isso, existe", TITLE="O capítulo que falta";
 const T4={ leadAt:Q4SEQ[4].fade+Q4SEQ[4].fadeDur+0.3 };
@@ -370,7 +370,7 @@ const T5tag={ at:CSEQ[1].fade+CSEQ[1].fadeDur+0.4 };
 T5tag.start=T5tag.at+0.5; T5tag.dur=1.9;
 // ---- cena 6 (transição): o fecho respira, aí a tirinha rasgada se ESVAI e o
 // título+fecho saem em fade — o palco fica limpo pra caça à frase (5 estações)
-const T6={ at:T5tag.start+T5tag.dur+1.8, fadeDur:1.0 };
+const T6={ at:T5tag.start+T5tag.dur+1.4, fadeDur:1.0 };
 // ---- cena 6: a caça à frase — 5 estações deslizando pra direita (plano no
 // cena6-prompts.md). letreiros manuscritos por código (logos = caligrafia);
 // personagens = grids eco_* (especulativos); a pista de cada estação é um
@@ -520,32 +520,32 @@ const BOIL_FPS=8, PMAX=1.15;
 function boil(now, ampPx, ampRot){        // tremor de linha do close-up (8fps)
   const s=Math.floor((now/1000)*BOIL_FPS);
   return { dx:(hash(s*13+1,7)-0.5)*2*ampPx, dy:(hash(s*7+5,3)-0.5)*2*ampPx, rot:(hash(s*17+2,11)-0.5)*2*ampRot }; }
-const T={ fade:0.35, revealStart:0.25, reveal:1.7, onAt:2.05, zoomStart:2.6, zoomDur:2.8,
-          sceneAt:5.9, sceneFade:0.7, girlReveal:1.0,
-          hStart:7.2, hDur:0.7, wStart:7.9, wDur:2.1,              // mão escreve dentro da tela
-          hLift:10.2, hLiftDur:0.5, wFade:11.4, wFadeDur:0.9,      // mão sai; texto some 1.4s após escrever
+const T={ fade:0.35, revealStart:0.25, reveal:1.5, onAt:1.85, zoomStart:2.3, zoomDur:2.5,
+          sceneAt:4.9, sceneFade:0.7, girlReveal:1.0,
+          hStart:6.2, hDur:0.7, wStart:6.9, wDur:1.5,              // mão escreve dentro da tela (rápido — pedido)
+          hLift:8.6, hLiftDur:0.5, wFade:9.3, wFadeDur:0.9,        // mão sai; texto some 0.9s após escrever
           // cena 2 (pacing 2026-07-03: timeline apertada UNIFORME — nada acelerado,
           // só menos tempo morto; offsets internos preservados: riffle=bookAt+3.2,
           // pages=riffle+2.4, zout/fut/walk/qHand = pages+0.2/+3.0/+3.5/+5.5)
-          pushAt:12.6, pushDur:2.5,                                // câmera empurra a moldura pra fora
-          standAt:13.0, standDur:1.4,                              // menina levanta (frames 1..11)
-          bookAt:13.0, bookDur:2.4,                                // folha vira livro
-          riffleAt:16.2,                                           // livro começa a folhear
+          pushAt:10.5, pushDur:2.5,                                // câmera empurra a moldura pra fora
+          standAt:10.9, standDur:1.4,                              // menina levanta (frames 1..11)
+          bookAt:10.9, bookDur:2.4,                                // folha vira livro
+          riffleAt:14.1,                                           // livro começa a folhear
           // cena 2b
-          pagesAt:18.6,                                            // folhas começam a sair do livro
-          zoutAt:18.8, zoutDur:5.0,                                // câmera afasta devagar (menina menor)
-          walkAt:22.1,                                             // menina anda -> carrossel desliza
+          pagesAt:16.5,                                            // folhas começam a sair do livro
+          zoutAt:16.7, zoutDur:5.0,                                // câmera afasta devagar (menina menor)
+          walkAt:20.0,                                             // menina anda -> carrossel desliza
           // cena 2c
-          futAt:21.6,                                              // a partir daqui os futuros podem pintar
-          qHand:24.1 };                                            // início da sequência da narração (QSEQ)
+          futAt:19.5,                                              // a partir daqui os futuros podem pintar
+          qHand:22.0 };                                            // início da sequência da narração (QSEQ)
 // agenda da narração: tempos derivados do tamanho de cada frase (escrita ~0.07s/letra,
 // segura 2.6s, fade 1.2s, respiro 0.5s antes da próxima; a última segura mais 4s)
 const QSEQ=(()=>{ const a=[]; let t=T.qHand;
   for(const q of QUOTES){ const n=q.replace(/\n/g,'').length;
-    const wDur=Math.max(2.0,n*0.055), start=t+0.5, end=start+wDur;
-    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.4, fadeDur:0.9 });
-    t=end+1.4+0.9+0.2; }
-  a[a.length-1].fade+=2.5;                      // a última respira mais antes de sair
+    const wDur=Math.max(2.0,n*0.05), start=t+0.5, end=start+wDur;
+    a.push({ text:q, hand:t, start, wDur, lift:end+0.2, fade:end+1.1, fadeDur:0.9 });
+    t=end+1.1+0.9+0.2; }
+  a[a.length-1].fade+=1.5;                      // a última respira mais antes de sair
   return a; })();
 // cena 3: o rebobinar começa quando a última frase terminou de sumir; a velocidade parte de
 // 1x (reverso) e cresce exponencialmente até o tempo virtual chegar a 0 -> corte pra cena 3
@@ -553,7 +553,7 @@ T.rewAt=QSEQ[QSEQ.length-1].fade+QSEQ[QSEQ.length-1].fadeDur+0.8;
 const REW_END=T.rewAt+Math.log(1+REW_A*T.rewAt)/REW_A;   // instante real em que o rewind zera
 let t0=performance.now();
 /* ---------- player de scrub (ajustes; barra some quando o mouse sai) ---------- */
-const DUR=REW_END+S6F.at+7;                              // fim nominal: a frase montada + respiro
+const DUR=REW_END+S6F.at+6;                              // fim nominal: a frase montada + respiro
 const bar=document.getElementById('bar'), tm=document.getElementById('tm'), pp=document.getElementById('pp');
 bar.max=Math.ceil(DUR*10);
 let paused=false, pausedEl=0;
